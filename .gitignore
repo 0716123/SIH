@@ -20,4 +20,5 @@ public/storage
 .phpunit.result.cache
 .idea/
 .vscode/
+.vercel/
 *.log
