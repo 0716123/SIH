@@ -9,8 +9,10 @@ import {
   mockDashboardMetrics 
 } from './mockData.js';
 
-// Base API URL (proxied via Vite to http://127.0.0.1:8000/api)
-const API_BASE_URL = '/api';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+const HEALTH_URL = API_BASE_URL.endsWith('/api')
+  ? `${API_BASE_URL.slice(0, -4)}/health`
+  : `${API_BASE_URL}/health`;
 
 class ApiService {
   constructor() {
@@ -60,7 +62,7 @@ class ApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2000);
       
-      const response = await fetch(`${API_BASE_URL}/../health`, {
+      const response = await fetch(HEALTH_URL, {
         signal: controller.signal,
       }).catch(() => null);
       

@@ -41,6 +41,11 @@ npm run dev
 
 The Vite development server runs at `http://localhost:5173` and proxies `/api` to the backend.
 
+## Vercel frontend deployment
+
+Import this repository into Vercel with the project root set to `sip-frontend`.
+Set `VITE_API_URL` to the deployed Laravel API URL ending in `/api`, then deploy with the default Vite settings.
+
 ## Production checks
 
 ```bash
