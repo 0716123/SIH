@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sip-case-tracking-system
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo_mysql
+          coverage: none
+      - uses: ramsey/composer-install@v3
+        with:
+          working-directory: sip-case-tracking-system
+      - run: cp .env.example .env
+      - run: php artisan key:generate
+      - run: php artisan about
+      - run: php artisan app:health
+      - run: php artisan route:list --except-vendor
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sip-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sip-frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build

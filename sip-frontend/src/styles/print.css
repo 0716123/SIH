@@ -1,0 +1,103 @@
+/* ===================================================
+   PRINT STYLES FOR CLINICAL CASE SUMMARIES & REPORTS
+   =================================================== */
+@media print {
+  /* Hide non-printable UI chrome */
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+  }
+
+  .sidebar,
+  .topbar,
+  .view-actions,
+  .btn,
+  .status-pill,
+  #toast-container,
+  .modal-footer {
+    display: none !important;
+  }
+
+  .main-wrapper {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .content-container {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .card, .glass-panel, .modal-dialog {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  /* Printable Medical Header */
+  .print-only {
+    display: block !important;
+  }
+
+  .print-header {
+    border-bottom: 2px solid #000000;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .print-header h1 {
+    font-size: 18pt;
+    font-weight: bold;
+    color: #000000 !important;
+    margin: 0;
+  }
+
+  .print-header p {
+    font-size: 10pt;
+    color: #444444;
+    margin: 2px 0 0 0;
+  }
+
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+  }
+
+  .print-table th, .print-table td {
+    border: 1px solid #cccccc;
+    padding: 6px 10px;
+    font-size: 10pt;
+    text-align: left;
+    color: #000000;
+  }
+
+  .print-table th {
+    background-color: #f3f4f6 !important;
+    font-weight: bold;
+  }
+
+  .print-signature-area {
+    margin-top: 40px;
+    display: flex;
+    justify-content: space-between;
+    page-break-inside: avoid;
+  }
+
+  .print-signature-box {
+    width: 200px;
+    border-top: 1px solid #000000;
+    text-align: center;
+    padding-top: 5px;
+    font-size: 9pt;
+  }
+}
+
+.print-only {
+  display: none;
+}
