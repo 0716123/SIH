@@ -66,10 +66,31 @@ class AppointmentController extends Controller
         $data['appointment_number'] = 'APT-' . date('Ymd') . '-' . strtoupper(Str::random(4));
         $data['status'] = $data['status'] ?? 'scheduled';
 
+        // Process advance commitment token deposit (defaults to 500.00)
+        $tokenAmount = isset($data['token_amount']) ? (float) $data['token_amount'] : 500.00;
+        $data['token_amount'] = $tokenAmount;
+        $data['payment_status'] = $data['payment_status'] ?? 'paid';
+        $data['payment_method'] = $data['payment_method'] ?? 'UPI';
+        $data['transaction_id'] = $data['transaction_id'] ?? ('TXN-SIP-' . date('Ymd') . '-' . strtoupper(Str::random(6)));
+        $data['paid_at'] = $data['payment_status'] === 'paid' ? now() : null;
+
         $appointment = Appointment::create($data);
         $appointment->load(['patient', 'doctor:id,name,specialization']);
 
-        return $this->sendResponse($appointment, __('messages.appointment_booked') ?: 'Appointment booked successfully.', 201);
+        // Record token deposit in patient charges ledger
+        if ($data['payment_status'] === 'paid' && $tokenAmount > 0) {
+            \App\Models\Charge::create([
+                'patient_id' => $appointment->patient_id,
+                'description' => "Consultation Advance Token Deposit (APT #{$appointment->appointment_number})",
+                'amount' => $tokenAmount,
+                'status' => 'paid',
+                'receipt_number' => 'RCT-' . date('Ymd') . '-' . strtoupper(Str::random(5)),
+                'paid_at' => now(),
+                'created_by' => $request->user()?->id,
+            ]);
+        }
+
+        return $this->sendResponse($appointment, __('messages.appointment_booked') ?: 'Appointment booked with ₹' . number_format($tokenAmount, 2) . ' commitment token received.', 201);
     }
 
     /**

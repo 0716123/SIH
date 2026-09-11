@@ -26,6 +26,10 @@ class AppointmentRequest extends FormRequest
             'reason' => 'required|string|max:255',
             'type' => 'required|string|in:consultation,follow_up,emergency',
             'status' => 'nullable|string|in:scheduled,completed,cancelled,no_show',
+            'token_amount' => 'nullable|numeric|min:0',
+            'payment_status' => 'nullable|string|in:paid,pending,waived,refunded',
+            'payment_method' => 'nullable|string|max:50',
+            'transaction_id' => 'nullable|string|max:100',
             'remarks' => 'nullable|string|max:500',
         ];
     }

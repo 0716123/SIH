@@ -15,13 +15,20 @@ class Appointment extends Model
         'doctor_id',
         'scheduled_at',
         'reason',
-        'type',   // 'consultation', 'follow_up', 'emergency'
-        'status', // 'scheduled', 'completed', 'cancelled', 'no_show'
+        'type',           // 'consultation', 'follow_up', 'emergency'
+        'status',         // 'scheduled', 'completed', 'cancelled', 'no_show'
+        'token_amount',   // advance commitment fee (e.g. 500)
+        'payment_status', // 'paid', 'pending', 'waived', 'refunded'
+        'payment_method', // 'UPI', 'Card', 'Cash', 'NetBanking'
+        'transaction_id',
+        'paid_at',
         'remarks',
     ];
 
     protected $casts = [
         'scheduled_at' => 'datetime',
+        'paid_at' => 'datetime',
+        'token_amount' => 'decimal:2',
     ];
 
     public function patient()

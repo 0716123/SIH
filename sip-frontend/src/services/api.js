@@ -468,6 +468,11 @@ class ApiService {
       if (method === 'POST') {
         const patient = this.localPatients.find(p => p.id === parseInt(body.patient_id)) || this.localPatients[0];
         const doctor = mockUsers.find(u => u.id === parseInt(body.doctor_id)) || mockUsers[1];
+        const tokenAmount = body.token_amount !== undefined ? Number(body.token_amount) : 500;
+        const paymentStatus = body.payment_status || 'paid';
+        const paymentMethod = body.payment_method || 'UPI';
+        const txnId = body.transaction_id || `TXN-SIP-${Date.now().toString(36).toUpperCase()}`;
+
         const newApt = {
           id: this.localAppointments.length + 1,
           appointment_number: `APT-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -478,16 +483,39 @@ class ApiService {
           scheduled_at: body.scheduled_at || new Date().toISOString(),
           reason: body.reason || 'General Follow-up Consultation',
           type: body.type || 'consultation',
-          status: 'scheduled'
+          status: 'scheduled',
+          token_amount: tokenAmount,
+          payment_status: paymentStatus,
+          payment_method: paymentMethod,
+          transaction_id: txnId,
+          paid_at: paymentStatus === 'paid' ? new Date().toISOString() : null,
+          remarks: body.remarks || `Advance token deposit of ₹${tokenAmount} received via ${paymentMethod}.`,
         };
         this.localAppointments.unshift(newApt);
-        return { success: true, data: newApt, message: 'Appointment booked successfully.' };
+
+        // Record charge in billing
+        if (paymentStatus === 'paid' && tokenAmount > 0) {
+          this.localCharges.unshift({
+            id: this.localCharges.length + 1,
+            patient_id: patient.id,
+            description: `Consultation Advance Token Deposit (${newApt.appointment_number})`,
+            amount: tokenAmount,
+            status: 'paid',
+            receipt_number: `RCT-${Date.now().toString(36).toUpperCase()}`,
+            created_at: new Date().toISOString(),
+          });
+        }
+
+        return { success: true, data: newApt, message: `Appointment booked with ₹${tokenAmount} commitment token confirmed.` };
       }
       const aptMatch = endpoint.match(/\/appointments\/(\d+)\/status/);
       if (aptMatch && method === 'PATCH') {
         const apt = this.localAppointments.find(a => a.id === parseInt(aptMatch[1]));
         if (apt) {
           apt.status = body.status;
+          if (body.status === 'no_show') {
+            apt.remarks = `Patient did not attend scheduled consultation. ₹${apt.token_amount || 500} token deposit forfeited.`;
+          }
           return { success: true, data: apt, message: 'Appointment status updated.' };
         }
       }
