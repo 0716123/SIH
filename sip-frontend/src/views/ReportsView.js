@@ -1,6 +1,7 @@
 import { api } from '../services/api.js';
 import { t } from '../services/i18n.js';
 import { exportAuditCsv, getAuditEntries } from '../services/audit.js';
+import drRajeshPhoto from '../assets/dr-rajesh-patel.jpg';
 
 export async function renderReportsView() {
   const container = document.createElement('div');
@@ -353,15 +354,29 @@ export async function renderReportsView() {
                 </tr>
               ` : doctors.map(doc => {
                 const attColor = doc.attendance_rate >= 90 ? 'var(--severity-mild)' : (doc.attendance_rate >= 70 ? 'var(--severity-moderate)' : 'var(--severity-critical)');
+                const isRajesh = doc.name.toLowerCase().includes('rajesh');
+                const avatarSrc = isRajesh ? drRajeshPhoto : (doc.avatar || null);
                 return `
                   <tr>
                     <td>
-                      <div style="display: flex; flex-direction: column;">
-                        <span style="font-weight: 700; font-size: 0.9375rem; color: var(--text-primary);">${doc.name}</span>
-                        <span style="font-size: 0.75rem; color: var(--text-secondary);">${doc.specialization || 'General Physician'}</span>
-                        <span class="mono" style="font-size: 0.6875rem; color: var(--primary-400); margin-top: 2px;">
-                          ${doc.license_number ? `Reg: ${doc.license_number}` : (doc.email || '')}
-                        </span>
+                      <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        ${avatarSrc ? `
+                          <img src="${avatarSrc}" 
+                               alt="${doc.name}" 
+                               onerror="this.src='/images/doctors/dr-rajesh-patel.jpg'"
+                               style="width: 42px; height: 42px; min-width: 42px; border-radius: 50%; object-fit: cover; object-position: center top; border: 2px solid #0284c7; box-shadow: 0 0 10px rgba(2, 132, 199, 0.35); flex-shrink: 0;" />
+                        ` : `
+                          <div style="width: 42px; height: 42px; min-width: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--primary-500), var(--teal-500)); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #fff; font-weight: 700; flex-shrink: 0;">
+                            👨‍⚕️
+                          </div>
+                        `}
+                        <div style="display: flex; flex-direction: column;">
+                          <span style="font-weight: 700; font-size: 0.9375rem; color: var(--text-primary);">${doc.name}</span>
+                          <span style="font-size: 0.75rem; color: var(--text-secondary);">${doc.specialization || 'General Physician'}</span>
+                          <span class="mono" style="font-size: 0.6875rem; color: var(--primary-400); margin-top: 2px;">
+                            ${doc.license_number ? `Reg: ${doc.license_number}` : (doc.email || '')}
+                          </span>
+                        </div>
                       </div>
                     </td>
 
@@ -688,15 +703,29 @@ export async function renderReportsView() {
 
     tbody.innerHTML = doctors.map(doc => {
       const attColor = doc.attendance_rate >= 90 ? 'var(--severity-mild)' : (doc.attendance_rate >= 70 ? 'var(--severity-moderate)' : 'var(--severity-critical)');
+      const isRajesh = doc.name.toLowerCase().includes('rajesh');
+      const avatarSrc = isRajesh ? drRajeshPhoto : (doc.avatar || null);
       return `
         <tr>
           <td>
-            <div style="display: flex; flex-direction: column;">
-              <span style="font-weight: 700; font-size: 0.9375rem; color: var(--text-primary);">${doc.name}</span>
-              <span style="font-size: 0.75rem; color: var(--text-secondary);">${doc.specialization || 'General Physician'}</span>
-              <span class="mono" style="font-size: 0.6875rem; color: var(--primary-400); margin-top: 2px;">
-                ${doc.license_number ? `Reg: ${doc.license_number}` : (doc.email || '')}
-              </span>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              ${avatarSrc ? `
+                <img src="${avatarSrc}" 
+                     alt="${doc.name}" 
+                     onerror="this.src='/images/doctors/dr-rajesh-patel.jpg'"
+                     style="width: 42px; height: 42px; min-width: 42px; border-radius: 50%; object-fit: cover; object-position: center top; border: 2px solid #0284c7; box-shadow: 0 0 10px rgba(2, 132, 199, 0.35); flex-shrink: 0;" />
+              ` : `
+                <div style="width: 42px; height: 42px; min-width: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--primary-500), var(--teal-500)); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #fff; font-weight: 700; flex-shrink: 0;">
+                  👨‍⚕️
+                </div>
+              `}
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: 700; font-size: 0.9375rem; color: var(--text-primary);">${doc.name}</span>
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">${doc.specialization || 'General Physician'}</span>
+                <span class="mono" style="font-size: 0.6875rem; color: var(--primary-400); margin-top: 2px;">
+                  ${doc.license_number ? `Reg: ${doc.license_number}` : (doc.email || '')}
+                </span>
+              </div>
             </div>
           </td>
 

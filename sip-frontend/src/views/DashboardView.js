@@ -3,6 +3,7 @@ import { auth } from '../services/auth.js';
 import { realtime } from '../services/realtime.js';
 import { t } from '../services/i18n.js';
 import { showToast } from '../components/Toast.js';
+import drRajeshPhoto from '../assets/dr-rajesh-patel.jpg';
 
 export async function renderDashboardView() {
   const container = document.createElement('div');
@@ -16,13 +17,29 @@ export async function renderDashboardView() {
   `;
 
   try {
-    const res = await api.request('/dashboard');
-    const data = res.data || {};
+    const [dashRes, doctorsRes] = await Promise.all([
+      api.request('/dashboard'),
+      api.request('/doctors').catch(() => ({ data: [] }))
+    ]);
+    const data = dashRes.data || {};
+    const doctors = doctorsRes.data?.data || doctorsRes.data || [];
     const metrics = data.metrics || {};
     const casesByStatus = data.cases_by_status || { open: 0, in_progress: 0, closed: 0, referred: 0 };
     const casesBySeverity = data.cases_by_severity || { mild: 0, moderate: 0, severe: 0, critical: 0 };
     const recentCases = data.recent_cases || [];
     const todayAppointments = data.today_appointments || data.upcoming_appointments || [];
+
+    const defaultDoctor = doctors.find(d => d.name.toLowerCase().includes('rajesh')) || {
+      id: 2,
+      name: 'Dr. Rajesh Patel',
+      specialization: 'General Medicine & Infectious Diseases',
+      license_number: 'GMC-GUJ-48291',
+      phone: '+91 98251 11223',
+      email: 'dr.rajesh@sip.org',
+      active_cases_count: 4,
+      today_appointments_count: 5,
+      avatar: '/images/doctors/dr-rajesh-patel.jpg'
+    };
 
     container.innerHTML = `
       <div class="view-header">
@@ -37,6 +54,136 @@ export async function renderDashboardView() {
           <a href="#/cases" class="btn btn-primary" id="dash-new-case-btn">
             + ${t('newCaseBtn')}
           </a>
+        </div>
+      </div>
+
+      <!-- Attending Consultant Spotlight Row: Dr. Rajesh Patel -->
+      <div class="card" style="margin-bottom: 2rem; padding: 1.5rem; background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.92)); border: 1px solid rgba(14, 165, 233, 0.35); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 20px rgba(14, 165, 233, 0.15);">
+        
+        <!-- Header with Doctor Selector -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); flex-wrap: wrap; gap: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.625rem;">
+            <span style="font-size: 1.25rem;">👨‍⚕️</span>
+            <span style="font-size: 0.8125rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal-400);">
+              Attending Consultant In-Clinic • Physician Profile
+            </span>
+            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block; box-shadow: 0 0 8px #10b981;"></span>
+              Active In OPD Room 104
+            </span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">Doctor Focus:</label>
+            <select id="dash-doctor-select" class="form-input" style="padding: 0.35rem 0.75rem; font-size: 0.8125rem; width: 230px; background: var(--bg-surface-elevated); border: 1px solid var(--border-medium);">
+              ${doctors.length === 0 ? `
+                <option value="2" selected>Dr. Rajesh Patel (General Medicine)</option>
+              ` : doctors.map(d => `
+                <option value="${d.id}" ${d.name.toLowerCase().includes('rajesh') ? 'selected' : ''}>
+                  ${d.name} (${d.specialization?.split('&')[0]?.trim() || 'Consultant'})
+                </option>
+              `).join('')}
+            </select>
+          </div>
+        </div>
+
+        <!-- FULL DETAIL IN ROW: Rounded Image on Left + Complete Details Aligned Horizontally in Row -->
+        <div id="doctor-spotlight-row" style="display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap;">
+          
+          <!-- Left: Rounded circular doctor portrait -->
+          <div style="position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+            <img id="doctor-spotlight-img"
+                 src="${drRajeshPhoto}" 
+                 alt="${defaultDoctor.name}" 
+                 onerror="this.src='/images/doctors/dr-rajesh-patel.jpg'"
+                 style="width: 110px; height: 110px; min-width: 110px; min-height: 110px; border-radius: 50%; object-fit: cover; object-position: center top; border: 3.5px solid #0284c7; box-shadow: 0 0 25px rgba(2, 132, 199, 0.45); display: block;" />
+            <span style="position: absolute; bottom: 2px; right: 4px; width: 22px; height: 22px; border-radius: 50%; background: #10b981; border: 3px solid #0f172a; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: bold;" title="Online / Verified On Duty">
+              ✓
+            </span>
+          </div>
+
+          <!-- Middle: Doctor Full Details (Name, Qualifications, Specialization, Registration, Contacts) in Row -->
+          <div style="flex: 1 1 360px; display: flex; flex-direction: column; gap: 0.375rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+              <h2 id="doctor-spotlight-name" style="margin: 0; font-size: 1.45rem; font-weight: 800; color: #ffffff; letter-spacing: -0.02em;">
+                ${defaultDoctor.name}
+              </h2>
+              <span class="badge" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; font-weight: 700; border: 1px solid rgba(56, 189, 248, 0.3);">
+                MD (Internal Medicine)
+              </span>
+              <span class="badge badge-closed">Senior Consultant</span>
+            </div>
+
+            <div id="doctor-spotlight-spec" style="font-size: 0.9375rem; font-weight: 600; color: #2dd4bf; display: flex; align-items: center; gap: 6px;">
+              <span>🩺</span> ${defaultDoctor.specialization || 'General Medicine & Infectious Diseases'}
+            </div>
+
+            <!-- Credentials, Registration & Chamber in row -->
+            <div style="display: flex; align-items: center; gap: 1rem; font-size: 0.8125rem; color: var(--text-secondary); flex-wrap: wrap; margin-top: 2px;">
+              <div>
+                <strong>Medical Reg:</strong> <span class="mono" id="doctor-spotlight-lic" style="color: #93c5fd;">${defaultDoctor.license_number || 'GMC-GUJ-48291'}</span>
+              </div>
+              <div style="color: var(--border-glow);">•</div>
+              <div>
+                <strong>Experience:</strong> 12+ Years Clinical Practice
+              </div>
+              <div style="color: var(--border-glow);">•</div>
+              <div>
+                <strong>OPD Chamber:</strong> Room 104, Block-A
+              </div>
+            </div>
+
+            <!-- Contacts & Schedule in row -->
+            <div style="display: flex; align-items: center; gap: 1rem; font-size: 0.8125rem; color: var(--text-secondary); flex-wrap: wrap; margin-top: 2px;">
+              <div>
+                📞 <strong>Phone:</strong> <span class="mono" id="doctor-spotlight-phone" style="color: #e2e8f0;">${defaultDoctor.phone || '+91 98251 11223'}</span>
+              </div>
+              <div style="color: var(--border-glow);">•</div>
+              <div>
+                ✉️ <strong>Email:</strong> <span id="doctor-spotlight-email" style="color: #e2e8f0;">${defaultDoctor.email || 'dr.rajesh@sip.org'}</span>
+              </div>
+              <div style="color: var(--border-glow);">•</div>
+              <div>
+                ⏱️ <strong>Timings:</strong> Mon – Sat (09:00 AM – 02:00 PM)
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Live Caseload Metric Badges & Action Buttons in Row -->
+          <div style="display: flex; flex-direction: column; gap: 0.875rem; align-items: flex-end; flex: 0 0 auto;">
+            <!-- Metric chips in row -->
+            <div style="display: flex; gap: 0.625rem; flex-wrap: wrap;">
+              <div style="background: rgba(14, 165, 233, 0.12); border: 1px solid rgba(14, 165, 233, 0.3); border-radius: var(--radius-md); padding: 0.5rem 0.875rem; text-align: center;">
+                <div class="mono" id="doctor-spotlight-cases" style="font-size: 1.15rem; font-weight: 800; color: #38bdf8;">
+                  ${defaultDoctor.active_cases_count ?? 4}
+                </div>
+                <div style="font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Active Cases</div>
+              </div>
+
+              <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 0.5rem 0.875rem; text-align: center;">
+                <div class="mono" id="doctor-spotlight-queue" style="font-size: 1.15rem; font-weight: 800; color: #34d399;">
+                  ${defaultDoctor.today_appointments_count ?? 5}
+                </div>
+                <div style="font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Today's Queue</div>
+              </div>
+
+              <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 0.5rem 0.875rem; text-align: center;">
+                <div class="mono" style="font-size: 1.15rem; font-weight: 800; color: #fbbf24;">₹500</div>
+                <div style="font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Token Verified</div>
+              </div>
+            </div>
+
+            <!-- Action buttons in row -->
+            <div style="display: flex; gap: 0.5rem;">
+              <a id="doctor-spotlight-cases-link" href="#/cases?doctor_id=${defaultDoctor.id}" class="btn btn-secondary btn-sm" style="padding: 0.4rem 0.875rem; font-size: 0.8125rem;">
+                📁 View Caseload
+              </a>
+              <a href="#/appointments" class="btn btn-primary btn-sm" style="padding: 0.4rem 0.875rem; font-size: 0.8125rem;">
+                📅 Book Appointment
+              </a>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -249,6 +396,39 @@ export async function renderDashboardView() {
         </div>
       </div>
     `;
+
+    // Doctor Spotlight Selector Listener
+    const docSelect = container.querySelector('#dash-doctor-select');
+    if (docSelect) {
+      docSelect.addEventListener('change', (e) => {
+        const selectedId = parseInt(e.target.value);
+        const doc = doctors.find(d => d.id === selectedId) || defaultDoctor;
+        const isRajesh = doc.name.toLowerCase().includes('rajesh');
+
+        const imgEl = container.querySelector('#doctor-spotlight-img');
+        const nameEl = container.querySelector('#doctor-spotlight-name');
+        const specEl = container.querySelector('#doctor-spotlight-spec');
+        const licEl = container.querySelector('#doctor-spotlight-lic');
+        const phoneEl = container.querySelector('#doctor-spotlight-phone');
+        const emailEl = container.querySelector('#doctor-spotlight-email');
+        const casesEl = container.querySelector('#doctor-spotlight-cases');
+        const queueEl = container.querySelector('#doctor-spotlight-queue');
+        const casesLinkEl = container.querySelector('#doctor-spotlight-cases-link');
+
+        if (imgEl) {
+          imgEl.src = isRajesh ? drRajeshPhoto : (doc.avatar || '/images/doctors/dr-rajesh-patel.jpg');
+          imgEl.alt = doc.name;
+        }
+        if (nameEl) nameEl.textContent = doc.name;
+        if (specEl) specEl.innerHTML = `<span>🩺</span> ${doc.specialization || 'Consultant Physician'}`;
+        if (licEl) licEl.textContent = doc.license_number || 'GMC-VERIFIED';
+        if (phoneEl) phoneEl.textContent = doc.phone || '+91 98000 00000';
+        if (emailEl) emailEl.textContent = doc.email || 'doctor@sip.org';
+        if (casesEl) casesEl.textContent = doc.active_cases_count ?? 3;
+        if (queueEl) queueEl.textContent = doc.today_appointments_count ?? 4;
+        if (casesLinkEl) casesLinkEl.href = `#/cases?doctor_id=${doc.id}`;
+      });
+    }
   } catch (err) {
     container.innerHTML = `<div class="card" style="color: var(--severity-critical); padding: 2rem;">Error loading dashboard: ${err.message}</div>`;
   }

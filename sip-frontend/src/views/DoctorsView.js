@@ -1,5 +1,6 @@
 import { api } from '../services/api.js';
 import { t } from '../services/i18n.js';
+import drRajeshPhoto from '../assets/dr-rajesh-patel.jpg';
 
 export async function renderDoctorsView() {
   const container = document.createElement('div');
@@ -17,13 +18,23 @@ export async function renderDoctorsView() {
 
     <!-- Doctors Cards Grid -->
     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
-      ${doctors.map(d => `
+      ${doctors.map(d => {
+        const isRajesh = d.name.toLowerCase().includes('rajesh');
+        const avatarSrc = isRajesh ? drRajeshPhoto : (d.avatar || null);
+        return `
         <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
           <div>
             <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
-              <div style="width: 3.5rem; height: 3.5rem; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--primary-500), var(--teal-500)); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #fff; font-weight: 800;">
-                👨‍⚕️
-              </div>
+              ${avatarSrc ? `
+                <img src="${avatarSrc}" 
+                     alt="${d.name}" 
+                     onerror="this.src='/images/doctors/dr-rajesh-patel.jpg'"
+                     style="width: 3.75rem; height: 3.75rem; min-width: 3.75rem; border-radius: 50%; object-fit: cover; object-position: center top; border: 3px solid #0284c7; box-shadow: 0 0 15px rgba(2, 132, 199, 0.35);" />
+              ` : `
+                <div style="width: 3.5rem; height: 3.5rem; border-radius: 50%; background: linear-gradient(135deg, var(--primary-500), var(--teal-500)); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #fff; font-weight: 800;">
+                  👨‍⚕️
+                </div>
+              `}
               <div>
                 <h3 style="font-size: 1.15rem; margin-bottom: 2px;">${d.name}</h3>
                 <div style="font-size: 0.8125rem; color: var(--teal-400); font-weight: 600;">${d.specialization || 'Consultant Physician'}</div>
@@ -60,7 +71,8 @@ export async function renderDoctorsView() {
             </a>
           </div>
         </div>
-      `).join('')}
+      `;
+      }).join('')}
     </div>
   `;
 
