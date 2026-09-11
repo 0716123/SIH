@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { mockUsers } from './mockData.js';
+import { recordAudit } from './audit.js';
 
 class AuthService {
   constructor() {
@@ -8,19 +8,11 @@ class AuthService {
   }
 
   loadPersistedUser() {
-    const saved = localStorage.getItem('sip_auth_user');
-    if (saved) {
-      try {
-        this.currentUser = JSON.parse(saved);
-      } catch {
-        this.currentUser = null;
-      }
-    } else {
-      // Default to Dr. Rajesh Patel (Doctor) or Admin for immediate rich preview
-      this.currentUser = mockUsers[0]; // Admin by default
-      localStorage.setItem('sip_auth_user', JSON.stringify(this.currentUser));
-      api.setToken('demo_sanctum_token_admin');
-    }
+    // Authentication is intentionally session-only so a fresh website visit starts at login.
+    this.currentUser = null;
+    sessionStorage.removeItem('sip_auth_user');
+    localStorage.removeItem('sip_auth_user');
+    api.setToken('');
   }
 
   getUser() {
@@ -52,23 +44,26 @@ class AuthService {
     if (res.data?.user && res.data?.token) {
       this.currentUser = res.data.user;
       api.setToken(res.data.token);
-      localStorage.setItem('sip_auth_user', JSON.stringify(this.currentUser));
+      sessionStorage.setItem('sip_auth_user', JSON.stringify(this.currentUser));
+      recordAudit('Signed in', 'Authentication', 'Successful login');
       window.dispatchEvent(new CustomEvent('auth-changed', { detail: this.currentUser }));
       return this.currentUser;
     }
     throw new Error(res.message || 'Login failed.');
   }
 
-  switchUser(user) {
-    this.currentUser = user;
-    api.setToken(`demo_sanctum_token_${user.id}`);
-    localStorage.setItem('sip_auth_user', JSON.stringify(user));
-    window.dispatchEvent(new CustomEvent('auth-changed', { detail: this.currentUser }));
+  async switchUser(user, password) {
+    if (!password) {
+      throw new Error('Password is required to switch accounts.');
+    }
+    return this.login(user.email, password);
   }
 
   logout() {
+    recordAudit('Signed out', 'Authentication', 'Session ended');
     this.currentUser = null;
     api.setToken('');
+    sessionStorage.removeItem('sip_auth_user');
     localStorage.removeItem('sip_auth_user');
     window.dispatchEvent(new CustomEvent('auth-changed', { detail: null }));
   }

@@ -1,5 +1,6 @@
 import { api } from '../services/api.js';
 import { t } from '../services/i18n.js';
+import { exportAuditCsv, getAuditEntries } from '../services/audit.js';
 
 export async function renderReportsView() {
   const container = document.createElement('div');
@@ -33,9 +34,8 @@ export async function renderReportsView() {
         <p>Analytical clinical intelligence, patient demographic distributions, and hospital performance audits.</p>
       </div>
       <div class="view-actions">
-        <button class="btn btn-outline" onclick="window.print()">
-          🖨️ Export / Print Analytics
-        </button>
+        <button class="btn btn-outline" id="print-reports-btn">🖨️ Export / Print Analytics</button>
+        <button class="btn btn-secondary" id="export-audit-btn">⬇️ Audit CSV (${getAuditEntries().length})</button>
       </div>
     </div>
 
@@ -180,6 +180,9 @@ export async function renderReportsView() {
       </div>
     </div>
   `;
+
+  container.querySelector('#print-reports-btn').addEventListener('click', () => window.print());
+  container.querySelector('#export-audit-btn').addEventListener('click', exportAuditCsv);
 
   return container;
 }

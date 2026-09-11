@@ -18,8 +18,8 @@ export async function renderDashboardView() {
     const res = await api.request('/dashboard');
     const data = res.data || {};
     const metrics = data.metrics || {};
-    const casesByStatus = data.cases_by_status || { open: 1, in_progress: 2, closed: 1, referred: 0 };
-    const casesBySeverity = data.cases_by_severity || { mild: 1, moderate: 1, severe: 1, critical: 1 };
+    const casesByStatus = data.cases_by_status || { open: 0, in_progress: 0, closed: 0, referred: 0 };
+    const casesBySeverity = data.cases_by_severity || { mild: 0, moderate: 0, severe: 0, critical: 0 };
     const recentCases = data.recent_cases || [];
     const todayAppointments = data.today_appointments || data.upcoming_appointments || [];
 
@@ -159,6 +159,9 @@ export async function renderDashboardView() {
         </div>
       </div>
 
+      <!-- Critical Case Escalation Queue -->
+      ${renderCriticalQueue(recentCases)}
+
       <!-- Bottom Tables: Today's Appointments & Recent Cases -->
       <div class="grid-cols-2">
         <!-- Today's Appointments -->
@@ -263,6 +266,30 @@ function renderSeverityBar(label, count, color) {
       <div style="height: 8px; background: var(--bg-surface-elevated); border-radius: var(--radius-full); overflow: hidden;">
         <div style="height: 100%; width: ${count > 0 ? percentage : 0}%; background: ${color}; border-radius: var(--radius-full); transition: width 0.5s ease;"></div>
       </div>
+    </div>
+  `;
+}
+
+function renderCriticalQueue(cases) {
+  const criticalCases = cases.filter(c => c.severity === 'critical' && c.status !== 'closed');
+  return `
+    <div class="card" style="margin-bottom: 2rem; border-color: ${criticalCases.length ? 'rgba(239, 68, 68, 0.45)' : 'var(--border-subtle)'};">
+      <div class="card-header">
+        <div class="card-title"><span>🚨</span> Critical Escalation Queue</div>
+        <span class="badge badge-critical">${criticalCases.length} active</span>
+      </div>
+      ${criticalCases.length === 0 ? `
+        <div style="padding: 0.75rem 0; color: var(--severity-mild);">No active critical cases require escalation.</div>
+      ` : `
+        <div style="display: grid; gap: 0.75rem;">
+          ${criticalCases.map(c => `
+            <a href="#/cases/${c.id}" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.85rem 1rem; border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius-md); background: rgba(239, 68, 68, 0.08); color: inherit; text-decoration: none;">
+              <span><strong>${c.patient?.first_name || 'Unknown'} ${c.patient?.last_name || 'Patient'}</strong><br><small style="color: var(--text-secondary);">${c.diagnosis || c.title || 'Critical case'} · ${c.case_number}</small></span>
+              <span class="badge badge-${c.status}">${c.status.replace('_', ' ')}</span>
+            </a>
+          `).join('')}
+        </div>
+      `}
     </div>
   `;
 }

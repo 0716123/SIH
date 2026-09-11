@@ -35,12 +35,12 @@ export function renderLoginView() {
         <form id="login-form">
           <div class="form-group">
             <label class="form-label" for="login-email">Email Address</label>
-            <input type="email" id="login-email" class="form-input" placeholder="e.g. admin@sip.org" required value="admin@sip.org" />
+            <input type="email" id="login-email" class="form-input" placeholder="e.g. admin@sip.org" required />
           </div>
 
           <div class="form-group">
             <label class="form-label" for="login-password">Password</label>
-            <input type="password" id="login-password" class="form-input" placeholder="••••••••" required value="Admin@12345" />
+            <input type="password" id="login-password" class="form-input" placeholder="Enter your password" required />
           </div>
 
           <div style="margin: 1.25rem 0;">
@@ -84,7 +84,8 @@ export function renderLoginView() {
     btn.addEventListener('click', () => {
       emailInput.value = btn.dataset.email;
       passInput.value = btn.dataset.pass;
-      form.requestSubmit();
+      emailInput.focus();
+      showToast('Demo credentials filled. Press Secure Hospital Sign In to continue.', 'info');
     });
   });
 

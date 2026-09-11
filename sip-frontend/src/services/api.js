@@ -25,16 +25,18 @@ class ApiService {
     this.localAppointments = [...mockAppointments];
     this.localFollowUps = [...mockFollowUps];
     this.localSymptoms = [...mockSymptoms];
+    this.localCharges = [];
   }
 
   getToken() {
-    return localStorage.getItem('sip_auth_token') || '';
+    return sessionStorage.getItem('sip_auth_token') || '';
   }
 
   setToken(token) {
     if (token) {
-      localStorage.setItem('sip_auth_token', token);
+      sessionStorage.setItem('sip_auth_token', token);
     } else {
+      sessionStorage.removeItem('sip_auth_token');
       localStorage.removeItem('sip_auth_token');
     }
   }
@@ -68,7 +70,14 @@ class ApiService {
       
       clearTimeout(timeoutId);
 
-      this.isBackendOnline = !!(response && (response.status === 200 || response.status === 404));
+      const contentType = response?.headers.get('content-type') || '';
+      const payload = contentType.includes('application/json')
+        ? await response.json().catch(() => null)
+        : null;
+      this.isBackendOnline = !!(
+        response?.ok &&
+        payload?.status === 'healthy'
+      );
     } catch {
       this.isBackendOnline = false;
     }
@@ -92,14 +101,27 @@ class ApiService {
           },
         });
 
-        const data = await res.json().catch(() => ({}));
+        const contentType = res.headers.get('content-type') || '';
+        const data = contentType.includes('application/json')
+          ? await res.json().catch(() => ({}))
+          : {};
+        if (!contentType.includes('application/json')) {
+          throw new Error('The API returned an invalid response. Check VITE_API_URL and the Laravel deployment.');
+        }
         if (!res.ok) {
           throw new Error(data.message || `Request failed with status ${res.status}`);
         }
         return data;
       } catch (err) {
         console.warn(`[Live API Error on ${endpoint}] Falling back to local data. Reason:`, err.message);
+        if (!this.getToken().startsWith('demo_sanctum_token_')) {
+          throw err;
+        }
       }
+    }
+
+    if (this.getToken() && !this.getToken().startsWith('demo_sanctum_token_')) {
+      throw new Error('The live API is unavailable. Check the Laravel API URL and deployment status.');
     }
 
     // Local fallback handler
@@ -109,15 +131,32 @@ class ApiService {
   // Graceful Offline / Demo simulation
   async mockHandler(endpoint, options) {
     const method = options.method || 'GET';
+    const [path] = endpoint.split('?');
     const body = options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : null;
+    const demoUserId = Number(this.getToken().match(/demo_sanctum_token_(\d+)/)?.[1] || 0);
+    const demoUser = mockUsers.find(user => user.id === demoUserId);
+    const doctorCases = demoUser?.role === 'doctor'
+      ? this.localCases.filter(item => item.doctor_id === demoUser.id)
+      : this.localCases;
+    const doctorAppointments = demoUser?.role === 'doctor'
+      ? this.localAppointments.filter(item => item.doctor_id === demoUser.id)
+      : this.localAppointments;
 
     // Simulate subtle realistic network latency (150ms)
     await new Promise(r => setTimeout(r, 120));
 
     // Auth Login
-    if (endpoint === '/auth/login' && method === 'POST') {
+    if (path === '/auth/login' && method === 'POST') {
       const user = mockUsers.find(u => u.email === body.email);
-      if (user) {
+      const demoPasswords = {
+        'admin@sip.org': 'Admin@12345',
+        'dr.rajesh@sip.org': 'Doctor@12345',
+        'dr.priya@sip.org': 'Doctor@12345',
+        'dr.anand@sip.org': 'Doctor@12345',
+        'staff@sip.org': 'Staff@12345',
+      };
+
+      if (user && body.password === demoPasswords[user.email]) {
         const fakeToken = `demo_sanctum_token_${user.id}_${Date.now()}`;
         return {
           success: true,
@@ -125,7 +164,7 @@ class ApiService {
           data: { user, token: fakeToken, token_type: 'Bearer' }
         };
       }
-      throw new Error('Invalid email or password. Please use one of the quick test accounts.');
+      throw new Error('Invalid email or password. Use the credentials shown in the demo login panel.');
     }
 
     // Dashboard
@@ -134,39 +173,46 @@ class ApiService {
         success: true,
         data: {
           metrics: {
-            total_patients: this.localPatients.length,
+            total_patients: demoUser?.role === 'doctor'
+              ? this.localPatients.filter(patient => patient.primary_doctor_id === demoUser.id || doctorCases.some(item => item.patient_id === patient.id)).length
+              : this.localPatients.length,
             total_doctors: mockUsers.filter(u => u.role === 'doctor').length,
-            total_cases: this.localCases.length,
-            active_cases: this.localCases.filter(c => c.status !== 'closed').length,
-            critical_cases: this.localCases.filter(c => c.severity === 'critical' && c.status !== 'closed').length,
-            today_appointments: this.localAppointments.length,
-            pending_follow_ups: this.localFollowUps.filter(f => f.status === 'pending').length,
+            total_cases: doctorCases.length,
+            active_cases: doctorCases.filter(c => c.status !== 'closed').length,
+            critical_cases: doctorCases.filter(c => c.severity === 'critical' && c.status !== 'closed').length,
+            today_appointments: doctorAppointments.length,
+            pending_follow_ups: demoUser?.role === 'doctor'
+              ? this.localFollowUps.filter(f => f.status === 'pending' && f.doctor_id === demoUser.id).length
+              : this.localFollowUps.filter(f => f.status === 'pending').length,
           },
           cases_by_status: {
-            open: this.localCases.filter(c => c.status === 'open').length,
-            in_progress: this.localCases.filter(c => c.status === 'in_progress').length,
-            closed: this.localCases.filter(c => c.status === 'closed').length,
-            referred: this.localCases.filter(c => c.status === 'referred').length,
+            open: doctorCases.filter(c => c.status === 'open').length,
+            in_progress: doctorCases.filter(c => c.status === 'in_progress').length,
+            closed: doctorCases.filter(c => c.status === 'closed').length,
+            referred: doctorCases.filter(c => c.status === 'referred').length,
           },
           cases_by_severity: {
-            mild: this.localCases.filter(c => c.severity === 'mild').length,
-            moderate: this.localCases.filter(c => c.severity === 'moderate').length,
-            severe: this.localCases.filter(c => c.severity === 'severe').length,
-            critical: this.localCases.filter(c => c.severity === 'critical').length,
+            mild: doctorCases.filter(c => c.severity === 'mild').length,
+            moderate: doctorCases.filter(c => c.severity === 'moderate').length,
+            severe: doctorCases.filter(c => c.severity === 'severe').length,
+            critical: doctorCases.filter(c => c.severity === 'critical').length,
           },
-          recent_cases: this.localCases.slice(0, 5),
-          upcoming_appointments: this.localAppointments.slice(0, 5),
-          today_appointments: this.localAppointments.slice(0, 5),
+          recent_cases: doctorCases.slice(0, 5),
+          upcoming_appointments: doctorAppointments.slice(0, 5),
+          today_appointments: doctorAppointments.slice(0, 5),
         }
       };
     }
 
     // Patients
     if (endpoint.startsWith('/patients')) {
-      if (endpoint === '/patients' && method === 'GET') {
-        return { success: true, data: { data: this.localPatients, total: this.localPatients.length } };
+      if (path === '/patients' && method === 'GET') {
+        const patients = demoUser?.role === 'doctor'
+          ? this.localPatients.filter(patient => patient.primary_doctor_id === demoUser.id || doctorCases.some(item => item.patient_id === patient.id))
+          : this.localPatients;
+        return { success: true, data: { data: patients, total: patients.length } };
       }
-      if (endpoint === '/patients' && method === 'POST') {
+      if (path === '/patients' && method === 'POST') {
         const newPatient = {
           id: this.localPatients.length + 1,
           uhid: body.uhid || `UHID-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
@@ -184,6 +230,8 @@ class ApiService {
           emergency_contact_name: body.emergency_contact_name || 'Relative',
           emergency_contact_phone: body.emergency_contact_phone || body.phone,
           is_active: true,
+          primary_doctor_id: body.primary_doctor_id ? parseInt(body.primary_doctor_id) : null,
+          primary_doctor: body.primary_doctor_id ? mockUsers.find(user => user.id === parseInt(body.primary_doctor_id)) : null,
           medical_history: {
             allergies: body.allergies ? body.allergies.split(',').map(s => s.trim()) : [],
             chronic_diseases: body.chronic_diseases ? body.chronic_diseases.split(',').map(s => s.trim()) : [],
@@ -217,10 +265,10 @@ class ApiService {
 
     // Cases
     if (endpoint.startsWith('/cases')) {
-      if (endpoint === '/cases' && method === 'GET') {
-        return { success: true, data: { data: this.localCases, total: this.localCases.length } };
+      if (path === '/cases' && method === 'GET') {
+        return { success: true, data: { data: doctorCases, total: doctorCases.length } };
       }
-      if (endpoint === '/cases' && method === 'POST') {
+      if (path === '/cases' && method === 'POST') {
         const patient = this.localPatients.find(p => p.id === parseInt(body.patient_id)) || this.localPatients[0];
         const doctor = mockUsers.find(u => u.id === parseInt(body.doctor_id)) || mockUsers[1];
         const newCase = {
@@ -269,15 +317,39 @@ class ApiService {
       }
     }
 
+    // Charges
+    if (endpoint.startsWith('/charges') && method === 'GET') {
+      let charges = this.localCharges;
+      const patientId = new URLSearchParams(endpoint.split('?')[1] || '').get('patient_id');
+      const caseId = new URLSearchParams(endpoint.split('?')[1] || '').get('case_record_id');
+      if (patientId) charges = charges.filter(charge => charge.patient_id === Number(patientId));
+      if (caseId) charges = charges.filter(charge => charge.case_record_id === Number(caseId));
+      return { success: true, data: charges };
+    }
+    if (path === '/charges' && method === 'POST') {
+      const charge = {
+        id: this.localCharges.length + 1,
+        case_record_id: Number(body.case_record_id),
+        patient_id: Number(body.patient_id || 0),
+        description: body.description,
+        amount: Number(body.amount),
+        status: body.status || 'pending',
+        receipt_number: body.status === 'paid' ? `RCT-${Date.now()}` : null,
+        created_at: new Date().toISOString(),
+      };
+      this.localCharges.unshift(charge);
+      return { success: true, data: charge, message: 'Charge added successfully.' };
+    }
+
     // Symptoms
-    if (endpoint === '/symptoms') {
+    if (path === '/symptoms') {
       return { success: true, data: this.localSymptoms };
     }
 
     // Appointments
     if (endpoint.startsWith('/appointments')) {
       if (method === 'GET') {
-        return { success: true, data: { data: this.localAppointments } };
+        return { success: true, data: { data: doctorAppointments } };
       }
       if (method === 'POST') {
         const patient = this.localPatients.find(p => p.id === parseInt(body.patient_id)) || this.localPatients[0];
@@ -309,7 +381,7 @@ class ApiService {
 
     // Follow-ups
     if (endpoint.startsWith('/follow-ups')) {
-      if (endpoint === '/follow-ups' || endpoint === '/follow-ups/pending') {
+      if (path === '/follow-ups' || path === '/follow-ups/pending') {
         return { success: true, data: { data: this.localFollowUps } };
       }
       const followUpMatch = endpoint.match(/\/follow-ups\/(\d+)\/complete/);

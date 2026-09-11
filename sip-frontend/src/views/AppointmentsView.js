@@ -2,18 +2,19 @@ import { api } from '../services/api.js';
 import { t } from '../services/i18n.js';
 import { openModal, closeModal } from '../components/Modal.js';
 import { showToast } from '../components/Toast.js';
-import { mockUsers } from '../services/mockData.js';
 
 export async function renderAppointmentsView() {
   const container = document.createElement('div');
 
-  const [aptsRes, patientsRes] = await Promise.all([
+  const [aptsRes, patientsRes, doctorsRes] = await Promise.all([
     api.request('/appointments'),
-    api.request('/patients')
+    api.request('/patients'),
+    api.request('/doctors')
   ]);
 
   let appointmentsList = aptsRes.data?.data || aptsRes.data || [];
   const patientsList = patientsRes.data?.data || patientsRes.data || [];
+  const doctorsList = doctorsRes.data?.data || doctorsRes.data || [];
 
   container.innerHTML = `
     <div class="view-header">
@@ -97,7 +98,7 @@ export async function renderAppointmentsView() {
 
   // Book Appointment Modal
   container.querySelector('#open-book-appointment-btn').addEventListener('click', () => {
-    openBookingModal(patientsList, async (bookingData) => {
+    openBookingModal(patientsList, doctorsList, async (bookingData) => {
       try {
         const res = await api.request('/appointments', {
           method: 'POST',
@@ -198,8 +199,7 @@ function attachAptActionListeners(container, list) {
   });
 }
 
-function openBookingModal(patients, onSave) {
-  const doctors = mockUsers.filter(u => u.role === 'doctor' || u.role === 'admin');
+function openBookingModal(patients, doctors, onSave) {
 
   const defaultDate = new Date();
   defaultDate.setHours(defaultDate.getHours() + 2);

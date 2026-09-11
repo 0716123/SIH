@@ -79,12 +79,24 @@ export function renderNavbar(currentPath = 'dashboard') {
     setLocale('gu');
   });
 
-  topbar.querySelector('#role-quick-switcher').addEventListener('change', (e) => {
+  topbar.querySelector('#role-quick-switcher').addEventListener('change', async (e) => {
     const selectedId = parseInt(e.target.value);
     const targetUser = mockUsers.find(u => u.id === selectedId);
-    if (targetUser) {
-      auth.switchUser(targetUser);
-      showToast(`Switched view to ${targetUser.name} (${targetUser.role.toUpperCase()})`, 'info');
+    if (!targetUser || targetUser.id === user?.id) return;
+
+    const password = window.prompt(`Enter password for ${targetUser.name}`);
+    e.target.value = String(user?.id || '');
+
+    if (!password) {
+      showToast('Role switch cancelled. Password is required.', 'info');
+      return;
+    }
+
+    try {
+      await auth.login(targetUser.email, password);
+      showToast(`Signed in as ${targetUser.name} (${targetUser.role.toUpperCase()})`, 'success');
+    } catch (err) {
+      showToast('Access denied: invalid doctor/admin password.', 'error');
     }
   });
 

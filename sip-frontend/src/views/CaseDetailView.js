@@ -3,11 +3,15 @@ import { auth } from '../services/auth.js';
 import { t } from '../services/i18n.js';
 import { openModal, closeModal } from '../components/Modal.js';
 import { showToast } from '../components/Toast.js';
+import { recordAudit } from '../services/audit.js';
 
 export async function renderCaseDetailView(caseId) {
   const container = document.createElement('div');
 
-  const res = await api.request(`/cases/${caseId}`);
+  const [res, chargesRes] = await Promise.all([
+    api.request(`/cases/${caseId}`),
+    api.request(`/charges?case_record_id=${caseId}`),
+  ]);
   const caseRecord = res.data;
 
   if (!caseRecord) {
@@ -26,6 +30,8 @@ export async function renderCaseDetailView(caseId) {
   const symptoms = caseRecord.symptoms || [];
   const prescriptions = caseRecord.prescriptions || [];
   const treatments = caseRecord.treatments || [];
+  const charges = chargesRes.data || caseRecord.charges || [];
+  const canManageCharges = auth.isAdmin() || auth.isStaff();
   const allergies = p.medical_history?.allergies || [];
 
   container.innerHTML = `
@@ -55,6 +61,7 @@ export async function renderCaseDetailView(caseId) {
         <button class="btn btn-primary" id="print-case-btn">
           🖨️ ${t('printSummaryBtn')}
         </button>
+        ${caseRecord.status === 'closed' && canManageCharges ? '<button class="btn btn-secondary" id="add-charge-btn">+ Add Charge</button>' : ''}
       </div>
     </div>
 
@@ -178,6 +185,21 @@ export async function renderCaseDetailView(caseId) {
       </div>
     </div>
 
+    <div class="card" style="margin-bottom: 1.5rem;">
+      <div class="card-header">
+        <div class="card-title"><span>₹</span> Treatment Charges</div>
+        ${caseRecord.status === 'closed' ? '<span class="badge badge-closed">Treatment complete</span>' : '<span class="badge badge-in_progress">Available after discharge</span>'}
+      </div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Description</th><th>Amount</th><th>Status</th><th>Receipt</th></tr></thead>
+          <tbody id="charges-tbody">
+            ${renderCharges(charges)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Print Only Medical Summary Template (Visible during Print) -->
     <div class="print-only">
       <div class="print-header">
@@ -236,6 +258,12 @@ export async function renderCaseDetailView(caseId) {
         </tbody>
       </table>
 
+      <h3>Charges</h3>
+      <table class="print-table">
+        <thead><tr><th>Description</th><th>Amount</th><th>Status</th><th>Receipt</th></tr></thead>
+        <tbody>${renderCharges(charges)}</tbody>
+      </table>
+
       <div class="print-signature-area">
         <div class="print-signature-box">
           Patient / Relative Signature
@@ -257,6 +285,7 @@ export async function renderCaseDetailView(caseId) {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus })
       });
+      recordAudit('Status changed', `Case ${caseRecord.case_number}`, `${caseRecord.status} -> ${newStatus}`);
       showToast(`Case status updated to ${newStatus.toUpperCase()}`, 'success');
     } catch (err) {
       showToast(err.message, 'error');
@@ -266,6 +295,23 @@ export async function renderCaseDetailView(caseId) {
   // Print Case Summary Trigger
   container.querySelector('#print-case-btn').addEventListener('click', () => {
     window.print();
+  });
+
+  container.querySelector('#add-charge-btn')?.addEventListener('click', () => {
+    openChargeModal(async (chargeData) => {
+      try {
+        const chargeRes = await api.request('/charges', {
+          method: 'POST',
+          body: JSON.stringify({ ...chargeData, case_record_id: caseRecord.id, patient_id: p.id }),
+        });
+        charges.unshift(chargeRes.data);
+        container.querySelector('#charges-tbody').innerHTML = renderCharges(charges);
+        closeModal();
+        showToast('Charge added successfully.', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
   });
 
   // Add Prescription Dialog
@@ -288,6 +334,41 @@ export async function renderCaseDetailView(caseId) {
   });
 
   return container;
+}
+
+function renderCharges(charges) {
+  if (!charges.length) {
+    return '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1.25rem;">No charges recorded.</td></tr>';
+  }
+  return charges.map(charge => `
+    <tr>
+      <td>${charge.description}</td>
+      <td class="mono">₹${Number(charge.amount).toFixed(2)}</td>
+      <td><span class="badge badge-${charge.status === 'paid' ? 'closed' : charge.status}">${charge.status}</span></td>
+      <td class="mono">${charge.receipt_number || '—'}</td>
+    </tr>
+  `).join('');
+}
+
+function openChargeModal(onSave) {
+  const modal = openModal({
+    title: 'Add Treatment Charge',
+    content: `
+      <form id="new-charge-form">
+        <div class="form-group"><label class="form-label">Description *</label><input name="description" class="form-input" placeholder="Consultation, procedure, medicine, room" required /></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group"><label class="form-label">Amount (INR) *</label><input name="amount" type="number" min="0.01" step="0.01" class="form-input" required /></div>
+          <div class="form-group"><label class="form-label">Payment Status</label><select name="status" class="form-select"><option value="pending">Pending</option><option value="paid">Paid</option><option value="waived">Waived</option></select></div>
+        </div>
+      </form>
+    `,
+    footer: '<button type="button" class="btn btn-secondary cancel-modal-btn">Cancel</button><button type="submit" form="new-charge-form" class="btn btn-primary">Save Charge</button>',
+  });
+  modal.backdrop.querySelector('.cancel-modal-btn').addEventListener('click', closeModal);
+  modal.backdrop.querySelector('#new-charge-form').addEventListener('submit', event => {
+    event.preventDefault();
+    onSave(Object.fromEntries(new FormData(event.target).entries()));
+  });
 }
 
 function openPrescriptionModal(onSave) {

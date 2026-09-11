@@ -3,20 +3,22 @@ import { auth } from '../services/auth.js';
 import { t } from '../services/i18n.js';
 import { openModal, closeModal } from '../components/Modal.js';
 import { showToast } from '../components/Toast.js';
-import { mockUsers } from '../services/mockData.js';
+import { recordAudit } from '../services/audit.js';
 
 export async function renderCasesView() {
   const container = document.createElement('div');
 
-  const [casesRes, patientsRes, symptomsRes] = await Promise.all([
+  const [casesRes, patientsRes, symptomsRes, doctorsRes] = await Promise.all([
     api.request('/cases'),
     api.request('/patients'),
-    api.request('/symptoms')
+    api.request('/symptoms'),
+    api.request('/doctors')
   ]);
 
   let casesList = casesRes.data?.data || casesRes.data || [];
   const patientsList = patientsRes.data?.data || patientsRes.data || [];
   const symptomsCatalog = symptomsRes.data || [];
+  const doctorsList = doctorsRes.data?.data || doctorsRes.data || [];
 
   container.innerHTML = `
     <div class="view-header">
@@ -115,12 +117,13 @@ export async function renderCasesView() {
 
   // New Case Modal
   container.querySelector('#open-new-case-modal').addEventListener('click', () => {
-    openNewCaseModal(patientsList, symptomsCatalog, async (caseData) => {
+    openNewCaseModal(patientsList, symptomsCatalog, doctorsList, async (caseData) => {
       try {
         const res = await api.request('/cases', {
           method: 'POST',
           body: JSON.stringify(caseData)
         });
+          recordAudit('Case created', `Case ${res.data?.case_number || res.data?.id || 'record'}`, res.data?.diagnosis || 'New clinical case');
         showToast('Clinical case record initialized successfully!', 'success');
         casesList.unshift(res.data);
         applyCaseFilters();
@@ -180,8 +183,7 @@ function renderCaseRows(list) {
   `).join('');
 }
 
-function openNewCaseModal(patients, symptomsCatalog, onSave) {
-  const doctors = mockUsers.filter(u => u.role === 'doctor' || u.role === 'admin');
+function openNewCaseModal(patients, symptomsCatalog, doctors, onSave) {
 
   const formHtml = `
     <form id="new-case-form">

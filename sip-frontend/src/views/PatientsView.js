@@ -2,12 +2,17 @@ import { api } from '../services/api.js';
 import { t } from '../services/i18n.js';
 import { openModal, closeModal } from '../components/Modal.js';
 import { showToast } from '../components/Toast.js';
+import { recordAudit } from '../services/audit.js';
 
 export async function renderPatientsView() {
   const container = document.createElement('div');
 
-  const res = await api.request('/patients');
-  let patients = res.data?.data || res.data || [];
+  const [patientsRes, doctorsRes] = await Promise.all([
+    api.request('/patients?per_page=100'),
+    api.request('/doctors')
+  ]);
+  let patients = patientsRes.data?.data || patientsRes.data || [];
+  const doctors = doctorsRes.data?.data || doctorsRes.data || [];
 
   container.innerHTML = `
     <div class="view-header">
@@ -104,14 +109,16 @@ export async function renderPatientsView() {
 
   // Open New Patient Modal
   container.querySelector('#open-new-patient-modal').addEventListener('click', () => {
-    openPatientModal(async (newPatientData) => {
+    openPatientModal(doctors, async (newPatientData) => {
       try {
         const res = await api.request('/patients', {
           method: 'POST',
           body: JSON.stringify(newPatientData)
         });
+          recordAudit('Patient registered', `Patient ${res.data?.uhid || res.data?.id || 'record'}`, `${res.data?.first_name || ''} ${res.data?.last_name || ''}`.trim());
         showToast('Patient registered successfully!', 'success');
-        patients.unshift(res.data);
+        const refreshedRes = await api.request('/patients?per_page=100');
+        patients = refreshedRes.data?.data || refreshedRes.data || [];
         applyFilters();
         closeModal();
       } catch (err) {
@@ -182,7 +189,7 @@ function attachRowListeners(container, patientsList) {
   });
 }
 
-function openPatientModal(onSave) {
+function openPatientModal(doctors, onSave) {
   const formHtml = `
     <form id="new-patient-form">
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
@@ -238,6 +245,16 @@ function openPatientModal(onSave) {
       <div class="form-group">
         <label class="form-label">Email Address</label>
         <input type="email" name="email" class="form-input" placeholder="patient@example.com" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Primary Doctor / Care Owner</label>
+        <select name="primary_doctor_id" class="form-select">
+          <option value="">Assign later during case creation</option>
+          ${doctors.filter(d => d.role === 'doctor' || !d.role).map(d => `
+            <option value="${d.id}">${d.name} (${d.specialization || 'General Medicine'})</option>
+          `).join('')}
+        </select>
       </div>
 
       <div class="form-group">
