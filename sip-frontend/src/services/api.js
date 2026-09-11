@@ -552,6 +552,216 @@ class ApiService {
       };
     }
 
+    // Reports: Comprehensive Hospital Summary & Doctor/Patient Breakdown
+    if (endpoint.startsWith('/reports/hospital-summary')) {
+      const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
+      const duration = urlParams.get('duration') || '30_days';
+      const customStart = urlParams.get('start_date');
+      const customEnd = urlParams.get('end_date');
+
+      const now = new Date();
+      let start = new Date();
+      let end = new Date();
+      let label = 'Last 30 Days';
+
+      if (duration === 'today') {
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        label = `Today (${now.toLocaleDateString()})`;
+      } else if (duration === '7_days') {
+        start.setDate(now.getDate() - 6);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        label = `Last 7 Days (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`;
+      } else if (duration === '30_days') {
+        start.setDate(now.getDate() - 29);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        label = `Last 30 Days (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`;
+      } else if (duration === 'this_month') {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        label = `This Month (${now.toLocaleString('default', { month: 'long', year: 'numeric' })})`;
+      } else if (duration === 'this_quarter') {
+        const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+        start = new Date(now.getFullYear(), quarterMonth, 1);
+        end = new Date(now.getFullYear(), quarterMonth + 3, 0, 23, 59, 59);
+        label = `This Quarter (Q${Math.floor(now.getMonth() / 3) + 1} ${now.getFullYear()})`;
+      } else if (duration === 'this_year') {
+        start = new Date(now.getFullYear(), 0, 1);
+        end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+        label = `This Year (${now.getFullYear()})`;
+      } else if (duration === 'all') {
+        start = new Date(2020, 0, 1);
+        end = new Date();
+        label = 'All Time Record';
+      } else if (customStart && customEnd) {
+        start = new Date(customStart);
+        end = new Date(customEnd + 'T23:59:59');
+        label = `Custom (${customStart} - ${customEnd})`;
+      }
+
+      const patients = this.getLocalPatients();
+      const cases = this.localCases;
+      const appointments = this.localAppointments;
+      const followUps = this.localFollowUps;
+
+      const inPeriodCases = cases.filter(c => {
+        const d = new Date(c.admission_date || c.created_at || now);
+        return d >= start && d <= end;
+      });
+
+      const inPeriodApts = appointments.filter(a => {
+        const d = new Date(a.scheduled_at || now);
+        return d >= start && d <= end;
+      });
+
+      const inPeriodPatients = patients.filter(p => {
+        const d = new Date(p.created_at || now);
+        return d >= start && d <= end;
+      });
+
+      const casesByStatus = {
+        open: inPeriodCases.filter(c => c.status === 'open').length,
+        in_progress: inPeriodCases.filter(c => c.status === 'in_progress').length,
+        closed: inPeriodCases.filter(c => c.status === 'closed').length,
+        referred: inPeriodCases.filter(c => c.status === 'referred').length,
+      };
+
+      const casesBySeverity = {
+        critical: inPeriodCases.filter(c => c.severity === 'critical').length,
+        severe: inPeriodCases.filter(c => c.severity === 'severe').length,
+        moderate: inPeriodCases.filter(c => c.severity === 'moderate').length,
+        mild: inPeriodCases.filter(c => c.severity === 'mild').length,
+      };
+
+      const aptsByStatus = {
+        scheduled: inPeriodApts.filter(a => a.status === 'scheduled').length,
+        completed: inPeriodApts.filter(a => a.status === 'completed').length,
+        no_show: inPeriodApts.filter(a => a.status === 'no_show').length,
+        cancelled: inPeriodApts.filter(a => a.status === 'cancelled').length,
+      };
+
+      const concluded = aptsByStatus.completed + aptsByStatus.no_show;
+      const attendanceRate = concluded > 0 ? Math.round((aptsByStatus.completed / concluded) * 1000) / 10 : (inPeriodApts.length > 0 ? 100 : 0);
+      const noShowRate = concluded > 0 ? Math.round((aptsByStatus.no_show / concluded) * 1000) / 10 : 0;
+
+      const tokenCollected = inPeriodApts.reduce((acc, a) => (a.payment_status === 'paid' ? acc + (Number(a.token_amount) || 500) : acc), 0);
+      const tokenCredited = inPeriodApts.reduce((acc, a) => (a.payment_status === 'paid' && a.status === 'completed' ? acc + (Number(a.token_amount) || 500) : acc), 0);
+      const tokenForfeited = inPeriodApts.reduce((acc, a) => (a.status === 'no_show' ? acc + (Number(a.token_amount) || 500) : acc), 0);
+      const tokenEscrow = inPeriodApts.reduce((acc, a) => (a.payment_status === 'paid' && a.status === 'scheduled' ? acc + (Number(a.token_amount) || 500) : acc), 0);
+
+      const ageCategories = {
+        pediatric: patients.filter(p => Number(p.age) <= 12).length,
+        adolescent: patients.filter(p => Number(p.age) >= 13 && Number(p.age) <= 18).length,
+        young_adult: patients.filter(p => Number(p.age) >= 19 && Number(p.age) <= 35).length,
+        middle_aged: patients.filter(p => Number(p.age) >= 36 && Number(p.age) <= 55).length,
+        senior: patients.filter(p => Number(p.age) >= 56 && Number(p.age) <= 70).length,
+        geriatric: patients.filter(p => Number(p.age) > 70).length,
+      };
+
+      const genderDistribution = {};
+      patients.forEach(p => {
+        const g = (p.gender || 'other').toLowerCase();
+        genderDistribution[g] = (genderDistribution[g] || 0) + 1;
+      });
+
+      const bloodGroupDistribution = {};
+      patients.forEach(p => {
+        const bg = p.blood_group || 'Unknown';
+        bloodGroupDistribution[bg] = (bloodGroupDistribution[bg] || 0) + 1;
+      });
+
+      const appointmentTypes = {};
+      inPeriodApts.forEach(a => {
+        const t = a.type || 'consultation';
+        appointmentTypes[t] = (appointmentTypes[t] || 0) + 1;
+      });
+
+      const doctorsList = mockUsers.filter(u => u.role === 'doctor').map(doc => {
+        const docCases = inPeriodCases.filter(c => c.doctor_id === doc.id);
+        const docApts = inPeriodApts.filter(a => a.doctor_id === doc.id);
+        const docCompleted = docApts.filter(a => a.status === 'completed').length;
+        const docNoShow = docApts.filter(a => a.status === 'no_show').length;
+        const docConcluded = docCompleted + docNoShow;
+        const docAttRate = docConcluded > 0 ? Math.round((docCompleted / docConcluded) * 1000) / 10 : (docApts.length > 0 ? 100 : 0);
+        const docRev = docApts.reduce((acc, a) => (a.payment_status === 'paid' ? acc + (Number(a.token_amount) || 500) : acc), 0);
+
+        const assignedPatients = new Set([
+          ...docCases.map(c => c.patient_id),
+          ...docApts.map(a => a.patient_id)
+        ]).size;
+
+        return {
+          id: doc.id,
+          name: doc.name,
+          email: doc.email,
+          specialization: doc.specialization || 'General Physician',
+          phone: doc.phone || '+91 9800000000',
+          license_number: doc.license_number || 'GMC-VERIFIED',
+          assigned_patients: assignedPatients,
+          total_cases: docCases.length,
+          active_cases: docCases.filter(c => c.status !== 'closed').length,
+          closed_cases: docCases.filter(c => c.status === 'closed').length,
+          severity: {
+            critical: docCases.filter(c => c.severity === 'critical').length,
+            severe: docCases.filter(c => c.severity === 'severe').length,
+            moderate: docCases.filter(c => c.severity === 'moderate').length,
+            mild: docCases.filter(c => c.severity === 'mild').length,
+          },
+          total_appointments: docApts.length,
+          completed_appointments: docCompleted,
+          no_show_appointments: docNoShow,
+          scheduled_appointments: docApts.filter(a => a.status === 'scheduled').length,
+          cancelled_appointments: docApts.filter(a => a.status === 'cancelled').length,
+          attendance_rate: docAttRate,
+          token_revenue: docRev,
+        };
+      });
+
+      return {
+        success: true,
+        data: {
+          filter: {
+            duration,
+            label,
+            start_date: start.toISOString().slice(0, 10),
+            end_date: end.toISOString().slice(0, 10),
+          },
+          executive_summary: {
+            patients_intake_period: inPeriodPatients.length || patients.length,
+            total_hospital_patients: patients.length,
+            total_cases_admitted: inPeriodCases.length || cases.length,
+            cases_by_status: casesByStatus,
+            cases_by_severity: casesBySeverity,
+            total_appointments: inPeriodApts.length,
+            appointments_by_status: aptsByStatus,
+            attendance_rate_percent: attendanceRate,
+            no_show_rate_percent: noShowRate,
+            total_followups: followUps.length,
+            followup_adherence_percent: 91.2,
+            token_financials: {
+              currency: 'INR',
+              token_unit_fee: 500,
+              total_collected: tokenCollected,
+              credited_to_consultations: tokenCredited,
+              forfeited_no_show: tokenForfeited,
+              held_in_escrow: tokenEscrow,
+            }
+          },
+          patient_categories: {
+            by_severity: casesBySeverity,
+            by_age_group: ageCategories,
+            by_gender: genderDistribution,
+            by_blood_group: bloodGroupDistribution,
+            by_appointment_type: appointmentTypes,
+          },
+          doctors_breakdown: doctorsList,
+        },
+        message: 'Comprehensive hospital summary report generated successfully.'
+      };
+    }
+
     // Generic response fallback
     return { success: true, message: 'Action simulated successfully.', data: {} };
   }

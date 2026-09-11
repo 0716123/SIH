@@ -185,5 +185,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/cases', [ReportController::class, 'caseReport'])->name('api.reports.cases');
         Route::get('/appointments', [ReportController::class, 'appointmentReport'])->name('api.reports.appointments');
         Route::get('/follow-ups', [ReportController::class, 'followUpReport'])->name('api.reports.follow-ups');
+        Route::get('/hospital-summary', [ReportController::class, 'hospitalSummary'])->name('api.reports.hospital-summary');
     });
 });
