@@ -122,10 +122,17 @@ export async function renderPatientsView() {
     }
   }
 
-  const refreshTimer = window.setInterval(() => refreshPatients(), 15000);
-  const stopRefresh = () => window.clearInterval(refreshTimer);
+  let stopStream = () => {};
+  const stopRefresh = () => stopStream();
   window.addEventListener('hashchange', stopRefresh, { once: true });
   refreshPatients({ showLoading: true });
+  api.stream('/patients/stream', async () => {
+    await refreshPatients();
+    showToast('Patient list updated from the live database.', 'info');
+  }).then(stop => { stopStream = stop; }).catch(error => {
+    syncStatus.textContent = 'Live updates unavailable';
+    console.warn('[Patients live updates]', error.message);
+  });
 
   // Open New Patient Modal
   container.querySelector('#open-new-patient-modal').addEventListener('click', () => {

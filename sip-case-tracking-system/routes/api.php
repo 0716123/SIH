@@ -59,6 +59,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('patients')->group(function () {
         Route::get('/', [PatientController::class, 'index'])->name('api.patients.index');
         Route::post('/', [PatientController::class, 'store'])->name('api.patients.store');
+        Route::get('/stream', [PatientController::class, 'stream'])->name('api.patients.stream');
         Route::get('/{id}', [PatientController::class, 'show'])->name('api.patients.show');
         Route::put('/{id}', [PatientController::class, 'update'])->name('api.patients.update');
         Route::delete('/{id}', [PatientController::class, 'destroy'])->middleware('role:admin')->name('api.patients.destroy');

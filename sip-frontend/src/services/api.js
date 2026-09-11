@@ -132,6 +132,47 @@ class ApiService {
     return this.mockHandler(endpoint, options);
   }
 
+  async stream(endpoint, onEvent) {
+    if (!this.isBackendOnline || !this.getToken() || this.getToken().startsWith('demo_sanctum_token_')) {
+      return () => {};
+    }
+
+    const controller = new AbortController();
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: this.getHeaders(),
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Live update stream failed with status ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    (async () => {
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const messages = buffer.split('\n\n');
+          buffer = messages.pop() || '';
+          messages.forEach(message => {
+            const data = message.match(/^data:\s*(.+)$/m)?.[1];
+            if (data) onEvent(JSON.parse(data));
+          });
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') console.warn('[Live update stream]', error.message);
+      }
+    })();
+
+    return () => controller.abort();
+  }
+
   // Graceful Offline / Demo simulation
   async mockHandler(endpoint, options) {
     const method = options.method || 'GET';

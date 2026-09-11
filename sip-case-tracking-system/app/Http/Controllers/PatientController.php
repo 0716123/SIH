@@ -88,6 +88,35 @@ class PatientController extends Controller
         );
     }
 
+    public function stream(Request $request)
+    {
+        return response()->stream(function () use ($request) {
+            $lastChangedAt = null;
+
+            while (!connection_aborted()) {
+                $changedAt = Patient::max('updated_at');
+
+                if ($changedAt !== $lastChangedAt) {
+                    echo "event: patients.changed\n";
+                    echo 'data: ' . json_encode(['updated_at' => $changedAt]) . "\n\n";
+                    $lastChangedAt = $changedAt;
+                } else {
+                    echo ": keep-alive\n\n";
+                }
+
+                if (function_exists('ob_flush')) {
+                    @ob_flush();
+                }
+                flush();
+                sleep(1);
+            }
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
+
     /**
      * Display the specified patient
      */
