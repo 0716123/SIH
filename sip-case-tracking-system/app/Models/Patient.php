@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
 
 class Patient extends Model
 {
@@ -19,6 +20,7 @@ class Patient extends Model
         'blood_group',
         'phone',
         'email',
+        'primary_doctor_id',
         'address',
         'city',
         'emergency_contact_name',
@@ -49,6 +51,11 @@ class Patient extends Model
         return $this->hasMany(CaseRecord::class);
     }
 
+    public function primaryDoctor()
+    {
+        return $this->belongsTo(User::class, 'primary_doctor_id');
+    }
+
     public function appointments()
     {
         return $this->hasMany(Appointment::class);
@@ -62,5 +69,10 @@ class Patient extends Model
     public function documents()
     {
         return $this->hasMany(CaseDocument::class);
+    }
+
+    public function charges()
+    {
+        return $this->hasMany(Charge::class);
     }
 }

@@ -72,6 +72,11 @@ class CaseRecord extends Model
         return $this->hasMany(CaseDocument::class, 'case_record_id');
     }
 
+    public function charges()
+    {
+        return $this->hasMany(Charge::class, 'case_record_id');
+    }
+
     public function scopeOpen($query)
     {
         return $query->where('status', 'open');

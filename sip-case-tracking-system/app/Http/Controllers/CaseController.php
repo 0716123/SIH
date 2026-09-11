@@ -70,6 +70,10 @@ class CaseController extends Controller
     {
         $data = $request->validated();
 
+        if ($request->user()?->isDoctor() && (int) $data['doctor_id'] !== $request->user()->id) {
+            return $this->sendError('Doctors can create cases only for their own caseload.', [], 403);
+        }
+
         DB::beginTransaction();
         try {
             // Auto-generate unique case tracking number
@@ -136,10 +140,15 @@ class CaseController extends Controller
             'prescriptions.doctor:id,name',
             'followUps.doctor:id,name',
             'documents.uploader:id,name',
+            'charges',
         ])->find($id);
 
         if (!$case) {
             return $this->sendError(__('messages.case_not_found') ?: 'Case not found.');
+        }
+
+        if (!$this->canDoctorAccess($case, request())) {
+            return $this->sendError('You are not assigned to this case.', [], 403);
         }
 
         return $this->sendResponse($case, 'Case details retrieved successfully.');
@@ -154,6 +163,10 @@ class CaseController extends Controller
 
         if (!$case) {
             return $this->sendError(__('messages.case_not_found') ?: 'Case not found.');
+        }
+
+        if (!$this->canDoctorAccess($case, $request)) {
+            return $this->sendError('You are not assigned to this case.', [], 403);
         }
 
         $data = $request->validated();
@@ -178,6 +191,10 @@ class CaseController extends Controller
             return $this->sendError(__('messages.case_not_found') ?: 'Case not found.');
         }
 
+        if (!$this->canDoctorAccess($case, $request)) {
+            return $this->sendError('You are not assigned to this case.', [], 403);
+        }
+
         $request->validate([
             'status'        => 'required|in:open,in_progress,closed,referred',
             'closure_notes' => 'nullable|string',
@@ -197,6 +214,12 @@ class CaseController extends Controller
         $case->save();
 
         return $this->sendResponse($case, 'Case status updated successfully.');
+    }
+
+    private function canDoctorAccess(CaseRecord $case, Request $request): bool
+    {
+        $user = $request->user();
+        return !$user || !$user->isDoctor() || $case->doctor_id === $user->id;
     }
 
     /**

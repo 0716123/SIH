@@ -38,11 +38,19 @@ class PatientRequest extends FormRequest
                 'max:150',
                 Rule::unique('patients', 'email')->ignore($patientId),
             ],
+            'primary_doctor_id' => [
+                'nullable',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'doctor')->where('is_active', true)),
+            ],
             'address' => 'nullable|string|max:500',
             'city' => 'nullable|string|max:100',
             'emergency_contact_name' => 'nullable|string|max:100',
             'emergency_contact_phone' => 'nullable|string|max:20',
             'is_active' => 'nullable|boolean',
+            'allergies' => 'nullable|string|max:1000',
+            'chronic_diseases' => 'nullable|string|max:1000',
+            'past_surgeries' => 'nullable|string|max:2000',
+            'current_medications' => 'nullable|string|max:2000',
         ];
     }
 

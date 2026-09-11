@@ -75,12 +75,16 @@ class AppointmentController extends Controller
     /**
      * Display the specified appointment
      */
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
         $appointment = Appointment::with(['patient.medicalHistory', 'doctor:id,name,specialization,phone'])->find($id);
 
         if (!$appointment) {
             return $this->sendError('Appointment not found.');
+        }
+
+        if (!$this->canDoctorAccess($appointment, $request)) {
+            return $this->sendError('You are not assigned to this appointment.', [], 403);
         }
 
         return $this->sendResponse($appointment, 'Appointment details retrieved successfully.');
@@ -97,6 +101,10 @@ class AppointmentController extends Controller
             return $this->sendError('Appointment not found.');
         }
 
+        if (!$this->canDoctorAccess($appointment, $request)) {
+            return $this->sendError('You are not assigned to this appointment.', [], 403);
+        }
+
         $appointment->update($request->validated());
 
         return $this->sendResponse($appointment, 'Appointment updated successfully.');
@@ -111,6 +119,10 @@ class AppointmentController extends Controller
 
         if (!$appointment) {
             return $this->sendError('Appointment not found.');
+        }
+
+        if (!$this->canDoctorAccess($appointment, $request)) {
+            return $this->sendError('You are not assigned to this appointment.', [], 403);
         }
 
         $request->validate([
@@ -138,9 +150,19 @@ class AppointmentController extends Controller
             return $this->sendError('Appointment not found.');
         }
 
+        if (!$this->canDoctorAccess($appointment, request())) {
+            return $this->sendError('You are not assigned to this appointment.', [], 403);
+        }
+
         $appointment->delete();
 
         return $this->sendResponse(null, 'Appointment cancelled and removed.');
+    }
+
+    private function canDoctorAccess(Appointment $appointment, Request $request): bool
+    {
+        $user = $request->user();
+        return !$user || !$user->isDoctor() || $appointment->doctor_id === $user->id;
     }
 
     /**

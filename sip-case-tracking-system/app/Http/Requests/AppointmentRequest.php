@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 class AppointmentRequest extends FormRequest
 {
@@ -17,7 +18,10 @@ class AppointmentRequest extends FormRequest
     {
         return [
             'patient_id' => 'required|exists:patients,id',
-            'doctor_id' => 'required|exists:users,id',
+            'doctor_id' => [
+                'required',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'doctor')->where('is_active', true)),
+            ],
             'scheduled_at' => 'required|date',
             'reason' => 'required|string|max:255',
             'type' => 'required|string|in:consultation,follow_up,emergency',

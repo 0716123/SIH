@@ -15,7 +15,16 @@ class PatientController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Patient::query();
+        $query = Patient::with('primaryDoctor:id,name,specialization');
+
+        if ($request->user()?->isDoctor()) {
+            $doctorId = $request->user()->id;
+            $query->where(function ($q) use ($doctorId) {
+                $q->where('primary_doctor_id', $doctorId)
+                  ->orWhereHas('cases', fn ($case) => $case->where('doctor_id', $doctorId))
+                  ->orWhereHas('appointments', fn ($appointment) => $appointment->where('doctor_id', $doctorId));
+            });
+        }
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
@@ -51,6 +60,13 @@ class PatientController extends Controller
     public function store(PatientRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $history = [
+            'allergies' => $this->splitList($data['allergies'] ?? null),
+            'chronic_diseases' => $this->splitList($data['chronic_diseases'] ?? null),
+            'past_surgeries' => $data['past_surgeries'] ?? 'None reported',
+            'current_medications' => $data['current_medications'] ?? 'None',
+        ];
+        unset($data['allergies'], $data['chronic_diseases'], $data['past_surgeries'], $data['current_medications']);
 
         // Auto-generate Unique Hospital ID if not provided
         if (empty($data['uhid'])) {
@@ -63,8 +79,13 @@ class PatientController extends Controller
         }
 
         $patient = Patient::create($data);
+        $patient->medicalHistory()->create($history);
 
-        return $this->sendResponse($patient, __('messages.patient_created') ?: 'Patient created successfully.', 201);
+        return $this->sendResponse(
+            $patient->load('primaryDoctor:id,name,specialization', 'medicalHistory'),
+            __('messages.patient_created') ?: 'Patient created successfully.',
+            201
+        );
     }
 
     /**
@@ -73,6 +94,7 @@ class PatientController extends Controller
     public function show(int $id): JsonResponse
     {
         $patient = Patient::with([
+            'primaryDoctor:id,name,specialization',
             'medicalHistory',
             'cases' => function ($q) {
                 $q->latest()->with('doctor:id,name,specialization');
@@ -90,6 +112,10 @@ class PatientController extends Controller
             return $this->sendError(__('messages.patient_not_found') ?: 'Patient not found.');
         }
 
+        if (!$this->canDoctorAccess($patient, request())) {
+            return $this->sendError('You are not assigned to this patient.', [], 403);
+        }
+
         return $this->sendResponse($patient, 'Patient details retrieved successfully.');
     }
 
@@ -102,6 +128,10 @@ class PatientController extends Controller
 
         if (!$patient) {
             return $this->sendError(__('messages.patient_not_found') ?: 'Patient not found.');
+        }
+
+        if (!$this->canDoctorAccess($patient, $request)) {
+            return $this->sendError('You are not assigned to this patient.', [], 403);
         }
 
         $data = $request->validated();
@@ -126,6 +156,10 @@ class PatientController extends Controller
             return $this->sendError(__('messages.patient_not_found') ?: 'Patient not found.');
         }
 
+        if (!$this->canDoctorAccess($patient, request())) {
+            return $this->sendError('You are not assigned to this patient.', [], 403);
+        }
+
         $activeCasesCount = $patient->cases()->whereIn('status', ['open', 'in_progress'])->count();
         if ($activeCasesCount > 0) {
             return $this->sendError('Cannot delete patient with active open cases. Please close cases first or deactivate patient.', [], 400);
@@ -145,6 +179,10 @@ class PatientController extends Controller
 
         if (!$patient) {
             return $this->sendError(__('messages.patient_not_found') ?: 'Patient not found.');
+        }
+
+        if (!$this->canDoctorAccess($patient, request())) {
+            return $this->sendError('You are not assigned to this patient.', [], 403);
         }
 
         $cases = $patient->cases()
@@ -169,5 +207,26 @@ class PatientController extends Controller
             ],
             'cases' => $cases,
         ], 'Patient case history retrieved successfully.');
+    }
+
+    private function canDoctorAccess(Patient $patient, Request $request): bool
+    {
+        $user = $request->user();
+        if (!$user || !$user->isDoctor()) {
+            return true;
+        }
+
+        return $patient->primary_doctor_id === $user->id
+            || $patient->cases()->where('doctor_id', $user->id)->exists()
+            || $patient->appointments()->where('doctor_id', $user->id)->exists();
+    }
+
+    private function splitList(?string $value): array
+    {
+        return collect(explode(',', (string) $value))
+            ->map(fn ($item) => trim($item))
+            ->filter()
+            ->values()
+            ->all();
     }
 }

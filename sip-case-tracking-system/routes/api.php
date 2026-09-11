@@ -3,6 +3,7 @@
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CaseController;
+use App\Http\Controllers\ChargeController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\FollowUpController;
@@ -109,6 +110,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/{id}', [PrescriptionController::class, 'show'])->name('api.prescriptions.show');
         Route::put('/{id}', [PrescriptionController::class, 'update'])->middleware('role:admin,doctor')->name('api.prescriptions.update');
         Route::delete('/{id}', [PrescriptionController::class, 'destroy'])->middleware('role:admin,doctor')->name('api.prescriptions.destroy');
+    });
+
+    // Patient Charges
+    Route::prefix('charges')->group(function () {
+        Route::get('/', [ChargeController::class, 'index'])->name('api.charges.index');
+        Route::post('/', [ChargeController::class, 'store'])->middleware('role:admin,staff')->name('api.charges.store');
+        Route::patch('/{id}', [ChargeController::class, 'update'])->middleware('role:admin,staff')->name('api.charges.update');
     });
 
     // Appointments

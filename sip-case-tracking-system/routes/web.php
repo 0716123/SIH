@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,9 +31,19 @@ Route::get('/', function () {
 });
 
 Route::get('/health', function () {
-    return response()->json([
-        'status'    => 'healthy',
-        'database'  => 'connected',
-        'timestamp' => now()->timestamp,
-    ]);
+    try {
+        DB::connection()->getPdo();
+
+        return response()->json([
+            'status'    => 'healthy',
+            'database'  => 'connected',
+            'timestamp' => now()->timestamp,
+        ]);
+    } catch (Throwable $exception) {
+        return response()->json([
+            'status'    => 'degraded',
+            'database'  => 'unavailable',
+            'timestamp' => now()->timestamp,
+        ], 503);
+    }
 });
