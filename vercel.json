@@ -1,0 +1,12 @@
+{
+  "buildCommand": "cd sip-frontend && npm run build",
+  "installCommand": "cd sip-frontend && npm ci",
+  "outputDirectory": "sip-frontend/dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
