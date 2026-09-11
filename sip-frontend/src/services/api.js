@@ -29,12 +29,15 @@ class ApiService {
   }
 
   getToken() {
-    return sessionStorage.getItem('sip_auth_token') || '';
+    return sessionStorage.getItem('sip_auth_token')
+      || localStorage.getItem('sip_auth_token')
+      || '';
   }
 
   setToken(token) {
     if (token) {
       sessionStorage.setItem('sip_auth_token', token);
+      localStorage.setItem('sip_auth_token', token);
     } else {
       sessionStorage.removeItem('sip_auth_token');
       localStorage.removeItem('sip_auth_token');

@@ -8,11 +8,19 @@ class AuthService {
   }
 
   loadPersistedUser() {
-    // Authentication is intentionally session-only so a fresh website visit starts at login.
-    this.currentUser = null;
-    sessionStorage.removeItem('sip_auth_user');
-    localStorage.removeItem('sip_auth_user');
-    api.setToken('');
+    const savedUser = localStorage.getItem('sip_auth_user') || sessionStorage.getItem('sip_auth_user');
+    const token = api.getToken();
+
+    try {
+      this.currentUser = savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      this.currentUser = null;
+    }
+
+    if (!this.currentUser || !token) {
+      this.currentUser = null;
+      api.setToken('');
+    }
   }
 
   getUser() {
@@ -45,6 +53,7 @@ class AuthService {
       this.currentUser = res.data.user;
       api.setToken(res.data.token);
       sessionStorage.setItem('sip_auth_user', JSON.stringify(this.currentUser));
+      localStorage.setItem('sip_auth_user', JSON.stringify(this.currentUser));
       recordAudit('Signed in', 'Authentication', 'Successful login');
       window.dispatchEvent(new CustomEvent('auth-changed', { detail: this.currentUser }));
       return this.currentUser;
