@@ -21,6 +21,7 @@ export async function renderPatientsView() {
         <p>Comprehensive patient intake repository, allergy safety records, and longitudinal case profiles.</p>
       </div>
       <div class="view-actions">
+        <span id="patients-sync-status" style="font-size: 0.75rem; color: var(--text-muted);">Syncing...</span>
         <button class="btn btn-primary" id="open-new-patient-modal">
           + ${t('newPatientBtn')}
         </button>
@@ -80,6 +81,7 @@ export async function renderPatientsView() {
   const genderFilter = container.querySelector('#filter-gender');
   const bloodFilter = container.querySelector('#filter-blood');
   const tbody = container.querySelector('#patients-tbody');
+  const syncStatus = container.querySelector('#patients-sync-status');
 
   function applyFilters() {
     const query = searchInput.value.toLowerCase();
@@ -107,6 +109,24 @@ export async function renderPatientsView() {
   genderFilter.addEventListener('change', applyFilters);
   bloodFilter.addEventListener('change', applyFilters);
 
+  async function refreshPatients({ showLoading = false } = {}) {
+    if (showLoading) syncStatus.textContent = 'Syncing...';
+    try {
+      const refreshedRes = await api.request('/patients?per_page=100');
+      patients = refreshedRes.data?.data || refreshedRes.data || [];
+      applyFilters();
+      syncStatus.textContent = `Live sync: ${new Date().toLocaleTimeString()}`;
+    } catch (err) {
+      syncStatus.textContent = 'Sync unavailable';
+      console.warn('[Patients live sync]', err.message);
+    }
+  }
+
+  const refreshTimer = window.setInterval(() => refreshPatients(), 15000);
+  const stopRefresh = () => window.clearInterval(refreshTimer);
+  window.addEventListener('hashchange', stopRefresh, { once: true });
+  refreshPatients({ showLoading: true });
+
   // Open New Patient Modal
   container.querySelector('#open-new-patient-modal').addEventListener('click', () => {
     openPatientModal(doctors, async (newPatientData) => {
@@ -117,9 +137,7 @@ export async function renderPatientsView() {
         });
           recordAudit('Patient registered', `Patient ${res.data?.uhid || res.data?.id || 'record'}`, `${res.data?.first_name || ''} ${res.data?.last_name || ''}`.trim());
         showToast('Patient registered successfully!', 'success');
-        const refreshedRes = await api.request('/patients?per_page=100');
-        patients = refreshedRes.data?.data || refreshedRes.data || [];
-        applyFilters();
+        await refreshPatients({ showLoading: true });
         closeModal();
       } catch (err) {
         showToast(err.message, 'error');

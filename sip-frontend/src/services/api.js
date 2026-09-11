@@ -95,6 +95,7 @@ class ApiService {
       try {
         const res = await fetch(`${API_BASE_URL}${endpoint}`, {
           ...options,
+          cache: 'no-store',
           headers: {
             ...this.getHeaders(options.body instanceof FormData),
             ...(options.headers || {}),
