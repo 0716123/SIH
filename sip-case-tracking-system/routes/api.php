@@ -9,10 +9,12 @@ use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\FollowUpController;
 use App\Http\Controllers\MedicalHistoryController;
 use App\Http\Controllers\PatientController;
+use App\Http\Controllers\PresenceController;
 use App\Http\Controllers\PrescriptionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SymptomController;
 use App\Http\Controllers\TreatmentController;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,8 +28,25 @@ use Illuminate\Support\Facades\Route;
 */
 
 // ==========================================
-// 1. PUBLIC AUTHENTICATION ROUTES
+// 1. PUBLIC ROUTES
 // ==========================================
+Route::get('/health', function () {
+    try {
+        DB::connection()->getPdo();
+        return response()->json([
+            'status'    => 'healthy',
+            'database'  => 'connected',
+            'timestamp' => now()->timestamp,
+        ]);
+    } catch (\Throwable $exception) {
+        return response()->json([
+            'status'    => 'degraded',
+            'database'  => 'unavailable',
+            'timestamp' => now()->timestamp,
+        ], 503);
+    }
+});
+
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->name('api.auth.login');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.auth.forgot-password');
@@ -48,6 +67,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
             ->name('api.auth.register');
     });
 
+    // Realtime Presence Tracking
+    Route::prefix('presence')->group(function () {
+        Route::post('/heartbeat', [PresenceController::class, 'heartbeat'])->name('api.presence.heartbeat');
+        Route::get('/active-users', [PresenceController::class, 'activeUsers'])->name('api.presence.active-users');
+    });
+
     // Dashboards
     Route::prefix('dashboard')->group(function () {
         Route::get('/', [DashboardController::class, 'index'])->name('api.dashboard');
@@ -59,6 +84,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('patients')->group(function () {
         Route::get('/', [PatientController::class, 'index'])->name('api.patients.index');
         Route::post('/', [PatientController::class, 'store'])->name('api.patients.store');
+        Route::get('/sync', [PatientController::class, 'sync'])->name('api.patients.sync');
         Route::get('/stream', [PatientController::class, 'stream'])->name('api.patients.stream');
         Route::get('/{id}', [PatientController::class, 'show'])->name('api.patients.show');
         Route::put('/{id}', [PatientController::class, 'update'])->name('api.patients.update');

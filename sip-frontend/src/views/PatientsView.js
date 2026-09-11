@@ -1,4 +1,6 @@
 import { api } from '../services/api.js';
+import { auth } from '../services/auth.js';
+import { realtime } from '../services/realtime.js';
 import { t } from '../services/i18n.js';
 import { openModal, closeModal } from '../components/Modal.js';
 import { showToast } from '../components/Toast.js';
@@ -83,6 +85,8 @@ export async function renderPatientsView() {
   const tbody = container.querySelector('#patients-tbody');
   const syncStatus = container.querySelector('#patients-sync-status');
 
+  let latestAddedId = null;
+
   function applyFilters() {
     const query = searchInput.value.toLowerCase();
     const g = genderFilter.value;
@@ -101,7 +105,7 @@ export async function renderPatientsView() {
       return matchSearch && matchGender && matchBlood;
     });
 
-    tbody.innerHTML = renderPatientRows(filtered);
+    tbody.innerHTML = renderPatientRows(filtered, latestAddedId);
     attachRowListeners(container, patients);
   }
 
@@ -109,30 +113,44 @@ export async function renderPatientsView() {
   genderFilter.addEventListener('change', applyFilters);
   bloodFilter.addEventListener('change', applyFilters);
 
-  async function refreshPatients({ showLoading = false } = {}) {
+  async function refreshPatients({ showLoading = false, highlightPatientId = null } = {}) {
     if (showLoading) syncStatus.textContent = 'Syncing...';
     try {
       const refreshedRes = await api.request('/patients?per_page=100');
       patients = refreshedRes.data?.data || refreshedRes.data || [];
+      if (highlightPatientId) {
+        latestAddedId = highlightPatientId;
+        setTimeout(() => {
+          latestAddedId = null;
+          applyFilters();
+        }, 8000);
+      }
       applyFilters();
-      syncStatus.textContent = `Live sync: ${new Date().toLocaleTimeString()}`;
+      syncStatus.innerHTML = `🟢 Live synced · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
     } catch (err) {
-      syncStatus.textContent = 'Sync unavailable';
+      syncStatus.textContent = 'Sync offline';
       console.warn('[Patients live sync]', err.message);
     }
   }
 
-  let stopStream = () => {};
-  const stopRefresh = () => stopStream();
+  // Subscribe to real-time sync across devices and tabs
+  const unsubscribeRealtime = realtime.onPatientUpdate(async (event) => {
+    const p = event.patient;
+    const pName = p?.full_name || `${p?.first_name || ''} ${p?.last_name || ''}`.trim() || 'Patient';
+    const creator = event.creator || 'Another Device';
+    const device = event.device ? ` (${event.device})` : '';
+
+    if (event.source !== 'local') {
+      showToast(`🔔 New patient added by ${creator}${device}: ${pName} (${p?.uhid || ''})`, 'info', 6000);
+    }
+    await refreshPatients({ highlightPatientId: p?.id || p?.uhid });
+  });
+
+  const stopRefresh = () => {
+    unsubscribeRealtime();
+  };
   window.addEventListener('hashchange', stopRefresh, { once: true });
   refreshPatients({ showLoading: true });
-  api.stream('/patients/stream', async () => {
-    await refreshPatients();
-    showToast('Patient list updated from the live database.', 'info');
-  }).then(stop => { stopStream = stop; }).catch(error => {
-    syncStatus.textContent = 'Live updates unavailable';
-    console.warn('[Patients live updates]', error.message);
-  });
 
   // Open New Patient Modal
   container.querySelector('#open-new-patient-modal').addEventListener('click', () => {
@@ -142,9 +160,14 @@ export async function renderPatientsView() {
           method: 'POST',
           body: JSON.stringify(newPatientData)
         });
-          recordAudit('Patient registered', `Patient ${res.data?.uhid || res.data?.id || 'record'}`, `${res.data?.first_name || ''} ${res.data?.last_name || ''}`.trim());
+        const createdPatient = res.data || {};
+        recordAudit('Patient registered', `Patient ${createdPatient?.uhid || createdPatient?.id || 'record'}`, `${createdPatient?.first_name || ''} ${createdPatient?.last_name || ''}`.trim());
         showToast('Patient registered successfully!', 'success');
-        await refreshPatients({ showLoading: true });
+
+        // Broadcast to other devices and tabs immediately
+        realtime.broadcastPatientCreated(createdPatient, auth.getUser()?.name);
+
+        await refreshPatients({ highlightPatientId: createdPatient?.id || createdPatient?.uhid });
         closeModal();
       } catch (err) {
         showToast(err.message, 'error');
@@ -156,17 +179,23 @@ export async function renderPatientsView() {
   return container;
 }
 
-function renderPatientRows(patientsList) {
+function renderPatientRows(patientsList, highlightId = null) {
   if (patientsList.length === 0) {
     return `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">No patients found matching the criteria.</td></tr>`;
   }
 
   return patientsList.map(p => {
     const allergies = p.medical_history?.allergies || [];
+    const isHighlighted = highlightId && (String(p.id) === String(highlightId) || p.uhid === highlightId);
+    const highlightStyle = isHighlighted
+      ? 'background: rgba(16, 185, 129, 0.16); border-left: 4px solid var(--teal-400); box-shadow: inset 0 0 12px rgba(16, 185, 129, 0.2);'
+      : '';
+
     return `
-      <tr>
+      <tr class="${isHighlighted ? 'new-patient-highlight' : ''}" style="${highlightStyle} transition: background 1.5s ease;">
         <td class="mono" style="font-weight: 700; color: var(--primary-300);">
           ${p.uhid}
+          ${isHighlighted ? '<span class="badge" style="background: var(--teal-500); color: #fff; font-size: 0.65rem; margin-left: 6px; padding: 2px 6px;">✨ LIVE NEW</span>' : ''}
         </td>
         <td>
           <div style="font-weight: 700;">${p.first_name} ${p.last_name}</div>

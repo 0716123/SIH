@@ -24,6 +24,7 @@ return new class extends Migration
             $table->enum('blood_group', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])->nullable();
             $table->string('phone', 20);
             $table->string('email', 150)->nullable()->unique();
+            $table->unsignedBigInteger('primary_doctor_id')->nullable();
             $table->text('address')->nullable();
             $table->string('city', 100)->nullable();
             $table->string('emergency_contact_name', 100)->nullable();
@@ -32,6 +33,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index('phone');
+            $table->index('primary_doctor_id');
             $table->index(['first_name', 'last_name']);
         });
 

@@ -6,6 +6,7 @@ use App\Http\Requests\PatientRequest;
 use App\Models\Patient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class PatientController extends Controller
@@ -81,24 +82,76 @@ class PatientController extends Controller
         $patient = Patient::create($data);
         $patient->medicalHistory()->create($history);
 
+        $loadedPatient = $patient->load('primaryDoctor:id,name,specialization', 'medicalHistory');
+
+        Cache::put('sip_last_patient_created', [
+            'id' => $patient->id,
+            'uhid' => $patient->uhid,
+            'first_name' => $patient->first_name,
+            'last_name' => $patient->last_name,
+            'full_name' => $patient->full_name,
+            'created_by' => $request->user()?->name ?? 'Clinical User',
+            'created_at' => now()->toIso8601String(),
+            'timestamp' => now()->timestamp,
+        ], 300);
+
         return $this->sendResponse(
-            $patient->load('primaryDoctor:id,name,specialization', 'medicalHistory'),
+            $loadedPatient,
             __('messages.patient_created') ?: 'Patient created successfully.',
             201
         );
+    }
+
+    /**
+     * Fast non-blocking patient sync status endpoint for live multi-device updates
+     */
+    public function sync(Request $request): JsonResponse
+    {
+        $query = Patient::query();
+
+        if ($request->user()?->isDoctor()) {
+            $doctorId = $request->user()->id;
+            $query->where(function ($q) use ($doctorId) {
+                $q->where('primary_doctor_id', $doctorId)
+                  ->orWhereHas('cases', fn ($case) => $case->where('doctor_id', $doctorId))
+                  ->orWhereHas('appointments', fn ($appointment) => $appointment->where('doctor_id', $doctorId));
+            });
+        }
+
+        $count = $query->count();
+        $latest = $query->latest('id')->first([
+            'id', 'uhid', 'first_name', 'last_name', 'gender', 'age', 'blood_group', 'phone', 'created_at', 'updated_at'
+        ]);
+
+        $lastCreatedEvent = Cache::get('sip_last_patient_created');
+
+        return $this->sendResponse([
+            'count' => $count,
+            'last_updated' => $latest?->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+            'latest_patient' => $latest,
+            'last_created_event' => $lastCreatedEvent,
+            'server_time' => now()->timestamp,
+        ], 'Patient sync status retrieved.');
     }
 
     public function stream(Request $request)
     {
         return response()->stream(function () use ($request) {
             $lastChangedAt = null;
+            $iterations = 0;
+            $maxIterations = 15; // Safe bounded duration to prevent worker starvation
 
-            while (!connection_aborted()) {
+            while (!connection_aborted() && $iterations < $maxIterations) {
                 $changedAt = Patient::max('updated_at');
 
-                if ($changedAt !== $lastChangedAt) {
+                if ($changedAt && $changedAt !== $lastChangedAt) {
+                    $latest = Patient::latest('id')->first(['id', 'uhid', 'first_name', 'last_name', 'updated_at']);
                     echo "event: patients.changed\n";
-                    echo 'data: ' . json_encode(['updated_at' => $changedAt]) . "\n\n";
+                    echo 'data: ' . json_encode([
+                        'updated_at' => $changedAt,
+                        'patient' => $latest,
+                        'last_event' => Cache::get('sip_last_patient_created'),
+                    ]) . "\n\n";
                     $lastChangedAt = $changedAt;
                 } else {
                     echo ": keep-alive\n\n";
@@ -108,6 +161,7 @@ class PatientController extends Controller
                     @ob_flush();
                 }
                 flush();
+                $iterations++;
                 sleep(1);
             }
         }, 200, [

@@ -1,5 +1,6 @@
 import { api } from '../services/api.js';
 import { auth } from '../services/auth.js';
+import { realtime } from '../services/realtime.js';
 import { t } from '../services/i18n.js';
 import { showToast } from '../components/Toast.js';
 
@@ -251,6 +252,28 @@ export async function renderDashboardView() {
   } catch (err) {
     container.innerHTML = `<div class="card" style="color: var(--severity-critical); padding: 2rem;">Error loading dashboard: ${err.message}</div>`;
   }
+
+  // Real-time dynamic dashboard refresh when other devices add patients/cases
+  const unsubscribeDashboardSync = realtime.onPatientUpdate(async () => {
+    try {
+      const refreshedRes = await api.request('/dashboard');
+      const refreshedData = refreshedRes.data || {};
+      const newMetrics = refreshedData.metrics || {};
+      const statCards = container.querySelectorAll('.stat-card .stat-value');
+      if (statCards.length > 0 && newMetrics.total_patients !== undefined) {
+        statCards[0].textContent = newMetrics.total_patients ?? statCards[0].textContent;
+        statCards[0].style.transition = 'color 0.4s ease';
+        statCards[0].style.color = 'var(--teal-400)';
+        setTimeout(() => { statCards[0].style.color = ''; }, 3000);
+      }
+    } catch {
+      // ignore
+    }
+  });
+
+  window.addEventListener('hashchange', () => {
+    unsubscribeDashboardSync();
+  }, { once: true });
 
   return container;
 }

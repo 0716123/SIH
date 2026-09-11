@@ -19,13 +19,38 @@ class ApiService {
     this.isBackendOnline = false;
     this.checkHealthPromise = null;
     
-    // In-memory state for Demo/Fallback Mode
-    this.localPatients = [...mockPatients];
+    // In-memory / Persisted state for Demo/Fallback Mode
+    let savedPatients = null;
+    try {
+      const raw = localStorage.getItem('sip_demo_patients');
+      if (raw) savedPatients = JSON.parse(raw);
+    } catch {
+      savedPatients = null;
+    }
+    this.localPatients = Array.isArray(savedPatients) && savedPatients.length > 0
+      ? savedPatients
+      : [...mockPatients];
+
     this.localCases = [...mockCases];
     this.localAppointments = [...mockAppointments];
     this.localFollowUps = [...mockFollowUps];
     this.localSymptoms = [...mockSymptoms];
     this.localCharges = [];
+  }
+
+  getLocalPatients() {
+    try {
+      const raw = localStorage.getItem('sip_demo_patients');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.localPatients = parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return this.localPatients;
   }
 
   getToken() {
@@ -67,9 +92,15 @@ class ApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2000);
       
-      const response = await fetch(HEALTH_URL, {
+      let response = await fetch(HEALTH_URL, {
         signal: controller.signal,
       }).catch(() => null);
+
+      if (!response || !response.ok) {
+        response = await fetch(`${API_BASE_URL}/health`, {
+          signal: controller.signal,
+        }).catch(() => null);
+      }
       
       clearTimeout(timeoutId);
 
@@ -212,15 +243,46 @@ class ApiService {
       throw new Error('Invalid email or password. Use the credentials shown in the demo login panel.');
     }
 
+    // Presence
+    if (endpoint.startsWith('/presence')) {
+      const now = Date.now();
+      let presences = [];
+      try {
+        presences = JSON.parse(localStorage.getItem('sip_active_presences') || '[]');
+      } catch {
+        presences = [];
+      }
+      if (path === '/presence/heartbeat' && method === 'POST') {
+        const clientId = body?.client_id || 'demo_client';
+        const device = body?.device || 'Web Browser';
+        presences = presences.filter(p => (now - p.last_seen) < 30000 && p.client_id !== clientId);
+        presences.push({
+          client_id: clientId,
+          user_id: demoUser?.id || 1,
+          name: demoUser?.name || 'Demo User',
+          role: demoUser?.role || 'staff',
+          device: device,
+          last_seen: now,
+        });
+        try { localStorage.setItem('sip_active_presences', JSON.stringify(presences)); } catch {}
+        return { success: true, data: presences, message: 'Heartbeat acknowledged' };
+      }
+      if (path === '/presence/active-users') {
+        const active = presences.filter(p => (now - p.last_seen) < 30000);
+        return { success: true, data: active };
+      }
+    }
+
     // Dashboard
     if (endpoint.startsWith('/dashboard')) {
+      const currentPatients = this.getLocalPatients();
       return {
         success: true,
         data: {
           metrics: {
             total_patients: demoUser?.role === 'doctor'
-              ? this.localPatients.filter(patient => patient.primary_doctor_id === demoUser.id || doctorCases.some(item => item.patient_id === patient.id)).length
-              : this.localPatients.length,
+              ? currentPatients.filter(patient => patient.primary_doctor_id === demoUser.id || doctorCases.some(item => item.patient_id === patient.id)).length
+              : currentPatients.length,
             total_doctors: mockUsers.filter(u => u.role === 'doctor').length,
             total_cases: doctorCases.length,
             active_cases: doctorCases.filter(c => c.status !== 'closed').length,
@@ -251,15 +313,26 @@ class ApiService {
 
     // Patients
     if (endpoint.startsWith('/patients')) {
+      const allPatients = this.getLocalPatients();
+      if (path === '/patients/sync') {
+        return {
+          success: true,
+          data: {
+            count: allPatients.length,
+            last_updated: allPatients[0]?.updated_at || new Date().toISOString(),
+            latest_patient: allPatients[0] || null,
+          }
+        };
+      }
       if (path === '/patients' && method === 'GET') {
         const patients = demoUser?.role === 'doctor'
-          ? this.localPatients.filter(patient => patient.primary_doctor_id === demoUser.id || doctorCases.some(item => item.patient_id === patient.id))
-          : this.localPatients;
+          ? allPatients.filter(patient => patient.primary_doctor_id === demoUser.id || doctorCases.some(item => item.patient_id === patient.id))
+          : allPatients;
         return { success: true, data: { data: patients, total: patients.length } };
       }
       if (path === '/patients' && method === 'POST') {
         const newPatient = {
-          id: this.localPatients.length + 1,
+          id: allPatients.length + 1,
           uhid: body.uhid || `UHID-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
           first_name: body.first_name,
           last_name: body.last_name,
@@ -286,6 +359,9 @@ class ApiService {
           cases_count: 0
         };
         this.localPatients.unshift(newPatient);
+        try {
+          localStorage.setItem('sip_demo_patients', JSON.stringify(this.localPatients));
+        } catch { /* ignore */ }
         return { success: true, data: newPatient, message: 'Patient registered successfully.' };
       }
       // Specific patient by ID

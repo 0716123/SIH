@@ -22,3 +22,4 @@ public/storage
 .vscode/
 .vercel/
 *.log
+mysql-data/

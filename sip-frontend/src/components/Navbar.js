@@ -1,6 +1,7 @@
 import { t, getLocale, setLocale } from '../services/i18n.js';
 import { auth } from '../services/auth.js';
 import { api } from '../services/api.js';
+import { realtime } from '../services/realtime.js';
 import { mockUsers } from '../services/mockData.js';
 import { showToast } from './Toast.js';
 
@@ -22,6 +23,12 @@ export function renderNavbar(currentPath = 'dashboard') {
     </div>
 
     <div class="topbar-right">
+      <!-- Live Users Presence Pill -->
+      <div class="status-pill" id="live-users-pill" title="Click to see active staff & devices online" style="cursor: pointer; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399;">
+        <span class="pulse-dot online" style="background: #10b981;"></span>
+        <span id="live-users-count" style="font-size: 0.75rem; font-weight: 700;">1 Active</span>
+      </div>
+
       <!-- Backend Health Pill -->
       <div class="status-pill" id="backend-health-pill" title="Click to test live backend connection" style="cursor: pointer;">
         <span class="pulse-dot ${isOnline ? 'online' : 'offline'}"></span>
@@ -61,6 +68,31 @@ export function renderNavbar(currentPath = 'dashboard') {
   `;
 
   // Attach Event Listeners
+  const liveUsersPill = topbar.querySelector('#live-users-pill');
+  const liveUsersCount = topbar.querySelector('#live-users-count');
+
+  let currentActiveUsers = [];
+  const unsubscribePresence = realtime.onPresenceUpdate((users) => {
+    currentActiveUsers = users;
+    const count = users.length || 1;
+    if (liveUsersCount) {
+      liveUsersCount.textContent = count === 1 ? '1 Device Online' : `${count} Devices Online`;
+    }
+  });
+
+  window.addEventListener('hashchange', () => {
+    unsubscribePresence();
+  }, { once: true });
+
+  liveUsersPill.addEventListener('click', () => {
+    if (currentActiveUsers.length === 0) {
+      showToast(`🟢 Active: You are connected (${realtime.device})`, 'info', 4000);
+      return;
+    }
+    const userSummary = currentActiveUsers.map(u => `• ${u.name} (${u.device || 'Remote'})${u.client_id === realtime.clientId ? ' [This Device]' : ''}`).join('\n');
+    showToast(`👥 Active Connected Devices (${currentActiveUsers.length}):\n${userSummary}`, 'info', 6000);
+  });
+
   topbar.querySelector('#backend-health-pill').addEventListener('click', async () => {
     showToast('Testing connection to http://127.0.0.1:8000/api...', 'info', 2000);
     const online = await api.checkBackendHealth();
