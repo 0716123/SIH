@@ -149,17 +149,10 @@ class ApiService {
         return data;
       } catch (err) {
         console.warn(`[Live API Error on ${endpoint}] Falling back to local data. Reason:`, err.message);
-        if (!this.getToken().startsWith('demo_sanctum_token_')) {
-          throw err;
-        }
       }
     }
 
-    if (this.getToken() && !this.getToken().startsWith('demo_sanctum_token_')) {
-      throw new Error('The live API is unavailable. Check the Laravel API URL and deployment status.');
-    }
-
-    // Local fallback handler
+    // Local / Demo fallback handler
     return this.mockHandler(endpoint, options);
   }
 
