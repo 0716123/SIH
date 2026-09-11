@@ -329,12 +329,49 @@ function openPatientModal(doctors, onSave) {
           <input type="text" name="chronic_diseases" class="form-input" placeholder="e.g. Diabetes, Hypertension, Asthma" />
         </div>
       </div>
+
+      <!-- Patient Verification Token Deposit Box -->
+      <div style="border-top: 1px solid var(--border-subtle); margin: 1rem 0; padding-top: 1rem;">
+        <div style="padding: 1.25rem; border-radius: var(--radius-lg); background: rgba(16, 185, 129, 0.08); border: 1.5px solid rgba(16, 185, 129, 0.35);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700; color: #10b981; font-size: 0.95rem;">
+              <span>🛡️ Patient Intake & Verification Deposit</span>
+            </div>
+            <span class="badge" style="background: var(--teal-500); color: #fff; font-size: 0.8rem; font-weight: 800; padding: 4px 10px;">
+              ₹500.00 Token
+            </span>
+          </div>
+
+          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 1rem;">
+            A <strong>₹500 intake verification deposit</strong> is collected to authenticate the patient record, stop fake profiles, and secure clinical file creation. This ₹500 is <strong>automatically credited to the patient's hospital billing balance</strong>.
+          </p>
+
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.8rem;">Registration Deposit Amount (INR) *</label>
+              <input type="number" name="registration_token" class="form-input" value="500" required readonly style="font-weight: 700; color: var(--teal-300);" />
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.8rem;">Payment Mode *</label>
+              <select name="registration_payment_method" class="form-select" required>
+                <option value="UPI">UPI (GPay / PhonePe / Paytm)</option>
+                <option value="Card">Debit / Credit Card</option>
+                <option value="Cash">Cash at Desk</option>
+                <option value="NetBanking">Net Banking</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
     </form>
   `;
 
   const footerHtml = `
     <button type="button" class="btn btn-secondary cancel-modal-btn">Cancel</button>
-    <button type="submit" form="new-patient-form" class="btn btn-primary">Save & Register Patient</button>
+    <button type="submit" form="new-patient-form" class="btn btn-primary" style="background: linear-gradient(135deg, #10b981, #059669); border: none;">
+      💳 Pay ₹500 Token & Register Patient
+    </button>
   `;
 
   const modal = openModal({

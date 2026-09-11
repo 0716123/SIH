@@ -79,8 +79,25 @@ class PatientController extends Controller
             $data['age'] = \Carbon\Carbon::parse($data['dob'])->age;
         }
 
+        $regToken = isset($data['registration_token']) ? (float) $data['registration_token'] : 500.00;
+        $payMethod = $data['registration_payment_method'] ?? 'UPI';
+        unset($data['registration_token'], $data['registration_payment_method']);
+
         $patient = Patient::create($data);
         $patient->medicalHistory()->create($history);
+
+        // Record patient registration token deposit in charges ledger
+        if ($regToken > 0) {
+            \App\Models\Charge::create([
+                'patient_id' => $patient->id,
+                'description' => "Patient Registration & Verification Deposit ({$patient->uhid})",
+                'amount' => $regToken,
+                'status' => 'paid',
+                'receipt_number' => 'RCT-' . date('Ymd') . '-' . strtoupper(Str::random(5)),
+                'paid_at' => now(),
+                'created_by' => $request->user()?->id,
+            ]);
+        }
 
         $loadedPatient = $patient->load('primaryDoctor:id,name,specialization', 'medicalHistory');
 

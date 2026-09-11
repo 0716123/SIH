@@ -51,6 +51,8 @@ class PatientRequest extends FormRequest
             'chronic_diseases' => 'nullable|string|max:1000',
             'past_surgeries' => 'nullable|string|max:2000',
             'current_medications' => 'nullable|string|max:2000',
+            'registration_token' => 'nullable|numeric|min:0',
+            'registration_payment_method' => 'nullable|string|max:50',
         ];
     }
 
