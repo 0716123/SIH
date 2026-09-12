@@ -3,7 +3,6 @@ import { auth } from '../services/auth.js';
 import { realtime } from '../services/realtime.js';
 import { t } from '../services/i18n.js';
 import { showToast } from '../components/Toast.js';
-import drRajeshPhoto from '../assets/dr-rajesh-patel.jpg';
 
 export async function renderDashboardView() {
   const container = document.createElement('div');
@@ -90,13 +89,11 @@ export async function renderDashboardView() {
         <!-- FULL DETAIL IN ROW: Rounded Image on Left + Complete Details Aligned Horizontally in Row -->
         <div id="doctor-spotlight-row" style="display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap;">
           
-          <!-- Left: Rounded circular doctor portrait -->
+          <!-- Left: Circular doctor avatar badge -->
           <div style="position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
-            <img id="doctor-spotlight-img"
-                 src="${drRajeshPhoto}" 
-                 alt="${defaultDoctor.name}" 
-                 onerror="this.src='/images/doctors/dr-rajesh-patel.jpg'"
-                 style="width: 110px; height: 110px; min-width: 110px; min-height: 110px; border-radius: 50%; object-fit: cover; object-position: center top; border: 3.5px solid #0284c7; box-shadow: 0 0 25px rgba(2, 132, 199, 0.45); display: block;" />
+            <div id="doctor-spotlight-avatar" style="width: 100px; height: 100px; min-width: 100px; min-height: 100px; border-radius: 50%; background: linear-gradient(135deg, #0284c7, #0d9488); display: flex; align-items: center; justify-content: center; font-size: 2.8rem; color: #fff; border: 3.5px solid #0284c7; box-shadow: 0 0 25px rgba(2, 132, 199, 0.45);">
+              👨‍⚕️
+            </div>
             <span style="position: absolute; bottom: 2px; right: 4px; width: 22px; height: 22px; border-radius: 50%; background: #10b981; border: 3px solid #0f172a; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: bold;" title="Online / Verified On Duty">
               ✓
             </span>
@@ -405,7 +402,6 @@ export async function renderDashboardView() {
         const doc = doctors.find(d => d.id === selectedId) || defaultDoctor;
         const isRajesh = doc.name.toLowerCase().includes('rajesh');
 
-        const imgEl = container.querySelector('#doctor-spotlight-img');
         const nameEl = container.querySelector('#doctor-spotlight-name');
         const specEl = container.querySelector('#doctor-spotlight-spec');
         const licEl = container.querySelector('#doctor-spotlight-lic');
@@ -415,10 +411,6 @@ export async function renderDashboardView() {
         const queueEl = container.querySelector('#doctor-spotlight-queue');
         const casesLinkEl = container.querySelector('#doctor-spotlight-cases-link');
 
-        if (imgEl) {
-          imgEl.src = isRajesh ? drRajeshPhoto : (doc.avatar || '/images/doctors/dr-rajesh-patel.jpg');
-          imgEl.alt = doc.name;
-        }
         if (nameEl) nameEl.textContent = doc.name;
         if (specEl) specEl.innerHTML = `<span>🩺</span> ${doc.specialization || 'Consultant Physician'}`;
         if (licEl) licEl.textContent = doc.license_number || 'GMC-VERIFIED';

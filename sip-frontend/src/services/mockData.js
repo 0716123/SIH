@@ -18,7 +18,6 @@ export const mockUsers = [
     phone: "+91 98251 11223",
     specialization: "General Medicine & Infectious Diseases",
     license_number: "GMC-88231",
-    avatar: "/images/doctors/dr-rajesh-patel.jpg",
     is_active: true,
   },
   {

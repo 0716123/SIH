@@ -239,7 +239,8 @@
 
 .view-title-group h1 {
   font-size: 1.875rem;
-  line-height: 1.2;
+  line-height: 1.35;
+  padding-top: 4px;
 }
 
 .view-title-group p {

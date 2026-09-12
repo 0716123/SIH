@@ -128,6 +128,18 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
+        // Doctor's cases breakdown by status
+        $casesByStatus = CaseRecord::where('doctor_id', $doctorId)
+            ->select('status', DB::raw('count(*) as count'))
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
+        // Doctor's cases breakdown by severity
+        $casesBySeverity = CaseRecord::where('doctor_id', $doctorId)
+            ->select('severity', DB::raw('count(*) as count'))
+            ->groupBy('severity')
+            ->pluck('count', 'severity');
+
         return $this->sendResponse([
             'metrics' => [
                 'total_assigned_cases' => $myCasesCount,
@@ -136,6 +148,8 @@ class DashboardController extends Controller
                 'today_appointments' => $todayAppointmentsCount,
                 'pending_follow_ups' => $pendingFollowUpsCount,
             ],
+            'cases_by_status' => $casesByStatus,
+            'cases_by_severity' => $casesBySeverity,
             'today_appointments' => $todayAppointments,
             'recent_cases' => $recentCases,
             'upcoming_follow_ups' => $upcomingFollowUps,
